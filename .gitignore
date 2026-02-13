@@ -1,0 +1,44 @@
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Node
+node_modules/
+dist/
+build/
+.npm/
+
+# Go
+backend/bin/
+backend/tmp/
+backend/vendor/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Python
+__pycache__/
+*.py[cod]
+*.venv
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Agent
+.agent/logs/
+.agent/tmp/
+.agent/memory/
+.agent/workspaces/
