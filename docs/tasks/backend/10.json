@@ -1,0 +1,15 @@
+{
+  "id": "10",
+  "subject": "Phase 10: Admin APIs, Distributed Tracing & Final Polish",
+  "description": "Admin user/booking management, OpenTelemetry + Jaeger, Grafana dashboards. 8 endpoints.",
+  "activeForm": "Implementing Phase 10 admin/tracing",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": [
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ]
+}

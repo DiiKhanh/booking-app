@@ -1,0 +1,13 @@
+{
+  "id": "9",
+  "subject": "Phase 9: Notifications & WebSocket",
+  "description": "Notifications CRUD, WebSocket for real-time saga status. 5 endpoints.",
+  "activeForm": "Implementing Phase 9 notifications",
+  "status": "pending",
+  "blocks": [
+    "10"
+  ],
+  "blockedBy": [
+    "8"
+  ]
+}

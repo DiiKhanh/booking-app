@@ -1,0 +1,14 @@
+{
+  "id": "8",
+  "subject": "Phase 8: Payment Saga & Event-Driven Architecture",
+  "description": "Async payment with RabbitMQ, saga orchestration, FSM, outbox pattern. 2 endpoints.",
+  "activeForm": "Implementing Phase 8 payments",
+  "status": "pending",
+  "blocks": [
+    "9",
+    "10"
+  ],
+  "blockedBy": [
+    "4"
+  ]
+}

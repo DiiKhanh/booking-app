@@ -1,0 +1,12 @@
+{
+  "id": "1",
+  "subject": "Phase 1: Foundational Refactoring & Observability",
+  "description": "Restructure to layered architecture (handler -> service -> repository), add structured logging, standard response envelope. Zero behavior change. Create domain models, repository interfaces, service layer, middleware, router extraction.",
+  "activeForm": "Implementing Phase 1 foundation",
+  "status": "in_progress",
+  "blocks": [
+    "2",
+    "5"
+  ],
+  "blockedBy": []
+}

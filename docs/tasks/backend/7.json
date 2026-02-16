@@ -1,0 +1,13 @@
+{
+  "id": "7",
+  "subject": "Phase 7: Search Engine (Elasticsearch + PostGIS)",
+  "description": "Geo-spatial search with Elasticsearch, Redis caching, seeder for 10K hotels. 1 endpoint.",
+  "activeForm": "Implementing Phase 7 search",
+  "status": "pending",
+  "blocks": [
+    "10"
+  ],
+  "blockedBy": [
+    "3"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "StayEase",
+    "slug": "stayease",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "stayease",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1A3A6B"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stayease.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1A3A6B"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.stayease.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#1A3A6B"
+        }
+      ]
+    ]
+  }
+}
