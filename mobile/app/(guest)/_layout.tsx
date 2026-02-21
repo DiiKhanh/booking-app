@@ -1,8 +1,33 @@
 import { Tabs } from "expo-router";
+import { View, Text, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { View, Text } from "react-native";
+import { BlurView } from "expo-blur";
 
 import { useNotifications } from "@/hooks/useNotifications";
+
+const TAB_ICON_SIZE = 22;
+
+function TabBarIcon({
+  name,
+  color,
+  focused,
+}: {
+  readonly name: keyof typeof Ionicons.glyphMap;
+  readonly color: string;
+  readonly focused: boolean;
+}) {
+  return (
+    <View className="items-center justify-center pt-1.5">
+      {focused && (
+        <View
+          className="absolute -top-0.5 h-1 w-5 rounded-full"
+          style={{ backgroundColor: "#FF5733" }}
+        />
+      )}
+      <Ionicons name={name} size={TAB_ICON_SIZE} color={color} />
+    </View>
+  );
+}
 
 export default function GuestLayout() {
   const { unreadCount } = useNotifications();
@@ -14,14 +39,31 @@ export default function GuestLayout() {
         tabBarActiveTintColor: "#FF5733",
         tabBarInactiveTintColor: "#94A3B8",
         tabBarStyle: {
-          backgroundColor: "#FFFFFF",
-          borderTopColor: "#E2E8F0",
-          paddingBottom: 4,
-          height: 56,
+          position: "absolute",
+          backgroundColor: Platform.OS === "ios"
+            ? "rgba(255, 255, 255, 0.85)"
+            : "#FFFFFF",
+          borderTopWidth: 0,
+          elevation: 0,
+          height: Platform.OS === "ios" ? 88 : 68,
+          paddingBottom: Platform.OS === "ios" ? 28 : 10,
+          paddingTop: 8,
+          shadowColor: "#0F172A",
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 16,
+          ...(Platform.OS === "android" && {
+            borderTopColor: "#F1F5F9",
+            borderTopWidth: 1,
+          }),
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontFamily: "Inter-Medium",
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingTop: 4,
         },
       }}
     >
@@ -29,8 +71,12 @@ export default function GuestLayout() {
         name="(home)"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name={focused ? "home" : "home-outline"}
+              color={color}
+              focused={focused}
+            />
           ),
         }}
       />
@@ -38,8 +84,12 @@ export default function GuestLayout() {
         name="(search)"
         options={{
           title: "Search",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name={focused ? "search" : "search-outline"}
+              color={color}
+              focused={focused}
+            />
           ),
         }}
       />
@@ -47,8 +97,12 @@ export default function GuestLayout() {
         name="(bookings)"
         options={{
           title: "Bookings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="receipt-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name={focused ? "receipt" : "receipt-outline"}
+              color={color}
+              focused={focused}
+            />
           ),
         }}
       />
@@ -56,17 +110,23 @@ export default function GuestLayout() {
         name="(notifications)"
         options={{
           title: "Alerts",
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color, focused }) => (
             <View>
-              <Ionicons
-                name="notifications-outline"
-                size={size}
+              <TabBarIcon
+                name={focused ? "notifications" : "notifications-outline"}
                 color={color}
+                focused={focused}
               />
               {unreadCount > 0 && (
-                <View className="absolute -right-1.5 -top-1 h-4 w-4 items-center justify-center rounded-full bg-accent-500">
-                  <Text className="text-[10px] font-heading-semi text-white">
-                    {unreadCount > 9 ? "9+" : unreadCount}
+                <View
+                  className="absolute -right-2.5 -top-0.5 h-[18px] min-w-[18px] items-center justify-center rounded-full px-1"
+                  style={{ backgroundColor: "#FF5733" }}
+                >
+                  <Text
+                    className="text-[10px] text-white"
+                    style={{ fontFamily: "PlusJakartaSans-SemiBold" }}
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
                   </Text>
                 </View>
               )}
@@ -78,8 +138,12 @@ export default function GuestLayout() {
         name="(profile)"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon
+              name={focused ? "person" : "person-outline"}
+              color={color}
+              focused={focused}
+            />
           ),
         }}
       />

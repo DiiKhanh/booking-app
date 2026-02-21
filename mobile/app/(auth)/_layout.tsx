@@ -8,10 +8,11 @@ export default function AuthLayout() {
         animation: "slide_from_right",
       }}
     >
+      <Stack.Screen name="onboarding" options={{ animation: "fade" }} />
+      <Stack.Screen name="welcome" options={{ animation: "fade" }} />
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
       <Stack.Screen name="forgot-password" />
-      <Stack.Screen name="onboarding" />
     </Stack>
   );
 }

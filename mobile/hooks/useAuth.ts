@@ -27,8 +27,10 @@ function navigateByRole(
 export function useAuth() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, isAuthenticated, isLoading, setUser, clearUser } =
+  const { user, isAuthenticated, isLoading } =
     useAuthStore();
+  const setUser = useAuthStore((s) => s.setUser);
+  const clearUser = useAuthStore((s) => s.clearUser);
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginRequest) => authService.login(data),
@@ -46,28 +48,12 @@ export function useAuth() {
     },
   });
 
-  const checkAuth = useCallback(async () => {
-    try {
-      const me = await authService.getMe();
-      setUser(me);
-    } catch {
-      clearUser();
-    }
-  }, [setUser, clearUser]);
-
   const logout = useCallback(async () => {
     await authService.logout();
     clearUser();
     queryClient.clear();
     router.replace("/(auth)/login");
   }, [clearUser, queryClient, router]);
-
-  const navigateToRoleHome = useCallback(() => {
-    const role = useAuthStore.getState().user?.role;
-    if (role) {
-      navigateByRole(router, role);
-    }
-  }, [router]);
 
   const errorMessage = loginMutation.error
     ? normalizeError(loginMutation.error).message
@@ -77,16 +63,14 @@ export function useAuth() {
 
   return {
     user,
-    role: user?.role ?? null as UserRole | null,
+    role: (user?.role ?? null) as UserRole | null,
     userName: user?.name ?? "",
     isAuthenticated,
     isLoading,
 
     login: loginMutation.mutate,
     register: registerMutation.mutate,
-    checkAuth,
     logout,
-    navigateToRoleHome,
 
     loginPending: loginMutation.isPending,
     registerPending: registerMutation.isPending,
