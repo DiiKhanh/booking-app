@@ -3,77 +3,103 @@ package main
 import (
 	"booking-app/internal/config"
 	"booking-app/internal/handler"
+	redisinfra "booking-app/internal/infrastructure/redis"
+	"booking-app/internal/observability"
 	"booking-app/internal/repository"
+	"booking-app/internal/router"
+	"booking-app/internal/service"
 	"context"
 	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 func main() {
-	// 0. Load .env file (ignore error if not present — env vars may be set externally)
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, reading from environment")
 	}
 
-	// 1. Load Configuration
+	// 1. Config
 	cfg := config.Load()
-	log.Printf("Starting %s...", cfg.AppName)
 
-	// 2. Connect to PostgreSQL
+	// 2. Logger
+	if err := observability.Init(!cfg.IsProduction()); err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	logger := observability.Global()
+	defer logger.Sync()
+
+	logger.Info("starting server", zap.String("app", cfg.AppName), zap.String("port", cfg.HTTPPort))
+
+	// 3. PostgreSQL
 	db, err := sql.Open("postgres", cfg.DBConnString())
 	if err != nil {
-		log.Fatalf("Failed to open DB connection: %v", err)
+		logger.Fatal("failed to open DB", zap.Error(err))
 	}
 	defer db.Close()
-
 	if err = db.Ping(); err != nil {
-		log.Fatalf("Could not ping DB: %v", err)
+		logger.Fatal("could not ping DB", zap.Error(err))
 	}
-	fmt.Println("✅ Connected to PostgreSQL!")
+	logger.Info("connected to PostgreSQL")
 
-	// 3. Connect to Redis
+	// 4. Redis
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.RedisAddr,
 		Password: cfg.RedisPassword,
-		DB:       0,
 	})
-
-	// Verify Redis connection using explicit context (go-redis/v9 requirement)
 	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
-		log.Fatalf("Could not connect to Redis: %v", err)
+		logger.Fatal("could not connect to Redis", zap.Error(err))
 	}
-	fmt.Println("✅ Connected to Redis!")
 	defer redisClient.Close()
+	logger.Info("connected to Redis")
 
-	// 4. Initialize Dependencies (pass both DB and Redis to repo)
-	bookingRepo := repository.NewBookingRepo(db, redisClient)
-	bookingHandler := handler.NewBookingHandler(bookingRepo)
+	// 5. Infrastructure
+	locker := redisinfra.NewRedisLocker(redisClient)
 
-	// 5. Setup Router with Panic Recovery middleware
-	r := gin.Default()
+	// 6. Repositories
+	bookingRepo := repository.NewBookingRepo(db, locker)
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
+	// 7. Services
+	bookingSvc := service.NewBookingService(bookingRepo)
 
-	api := r.Group("/api")
-	{
-		api.POST("/bookings", bookingHandler.CreateBooking)
-		api.POST("/admin/init", bookingHandler.InitializeInventory)
+	// 8. Handlers
+	bookingHandler := handler.NewBookingHandler(bookingSvc)
+
+	// 9. Router
+	r := router.New(bookingHandler)
+
+	// 10. Server with graceful shutdown
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%s", cfg.HTTPPort),
+		Handler: r,
 	}
 
-	// 6. Run Server
-	port := cfg.HTTPPort
-	fmt.Printf("🚀 Server running on port %s\n", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatal(err)
+	go func() {
+		logger.Info("server listening", zap.String("addr", srv.Addr))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("server error", zap.Error(err))
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("server forced to shutdown", zap.Error(err))
 	}
+	logger.Info("server exited")
 }
