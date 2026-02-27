@@ -10,6 +10,10 @@ import (
 type BookingRepository interface {
 	CreateBooking(ctx context.Context, booking *domain.Booking) error
 	InitializeInventory(ctx context.Context, roomID int, startDate time.Time, days int, total int) error
+	FindBookingByID(ctx context.Context, id int) (*domain.Booking, error)
+	ListBookingsByUser(ctx context.Context, userID string, page, limit int) ([]*domain.Booking, int, error)
+	UpdateBookingStatus(ctx context.Context, id int, status string) error
+	CancelBooking(ctx context.Context, id int, userID string) error
 }
 
 // UserRepository defines data access operations for users.

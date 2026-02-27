@@ -3,7 +3,7 @@
   "subject": "Phase 4: Enhanced Booking Flow",
   "description": "Authenticated bookings with dynamic pricing, list/detail/cancel, inventory restoration on cancel. 5 endpoints.",
   "activeForm": "Implementing Phase 4 bookings",
-  "status": "pending",
+  "status": "completed",
   "blocks": [
     "6",
     "8"

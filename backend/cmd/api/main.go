@@ -84,7 +84,7 @@ func main() {
 	dashboardRepo := repository.NewDashboardRepo(db)
 
 	// 7. Services
-	bookingSvc := service.NewBookingService(bookingRepo)
+	bookingSvc := service.NewBookingService(bookingRepo, roomRepo)
 	authSvc := service.NewAuthService(userRepo, tokenRepo, tokenMgr)
 	hotelSvc := service.NewHotelService(hotelRepo)
 	roomSvc := service.NewRoomService(roomRepo, hotelRepo)

@@ -21,7 +21,7 @@ func New(
 ) *gin.Engine {
 	r := gin.New()
 
-	// Global middleware stack (order matters — see distributed-booping-galaxy.md)
+	// Global middleware stack (order matters)
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CorrelationID())
 	r.Use(middleware.RequestLogger())
@@ -54,8 +54,18 @@ func New(
 		v1.GET("/hotels/:id", hotelHandler.GetHotel)
 		v1.GET("/hotels/:id/rooms", roomHandler.ListRoomsByHotel)
 
-		// ----- Booking routes -----
-		v1.POST("/bookings", bookingHandler.CreateBooking)
+		// ----- Booking routes (JWT required) -----
+		bookingGroup := v1.Group("/bookings")
+		bookingGroup.Use(middleware.JWTAuth(tokenMgr))
+		{
+			bookingGroup.POST("", bookingHandler.CreateBooking)
+			bookingGroup.GET("", bookingHandler.ListMyBookings)
+			bookingGroup.GET("/:id", bookingHandler.GetBooking)
+			bookingGroup.GET("/:id/status", bookingHandler.GetBookingStatus)
+			bookingGroup.DELETE("/:id", bookingHandler.CancelBooking)
+		}
+
+		// Admin init route (kept for convenience, no auth to match original)
 		v1.POST("/admin/init", bookingHandler.InitializeInventory)
 
 		// ----- Owner routes (JWT + role=owner) -----
@@ -88,10 +98,11 @@ func New(
 		}
 	}
 
-	// Legacy route (no version prefix) — kept for backward compatibility
+	// Legacy routes (no version prefix) — kept for backward compatibility with k6 load tests.
+	// These do NOT require JWT authentication.
 	api := r.Group("/api")
 	{
-		api.POST("/bookings", bookingHandler.CreateBooking)
+		api.POST("/bookings", bookingHandler.CreateBookingLegacy)
 		api.POST("/admin/init", bookingHandler.InitializeInventory)
 	}
 

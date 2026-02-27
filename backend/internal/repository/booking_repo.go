@@ -5,6 +5,7 @@ import (
 	redisinfra "booking-app/internal/infrastructure/redis"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -96,6 +97,163 @@ func (r *BookingRepo) CreateBooking(ctx context.Context, booking *domain.Booking
 		booking.ID, booking.UserID, booking.RoomID, dateStr)
 
 	return nil
+}
+
+// FindBookingByID retrieves a single booking by ID.
+func (r *BookingRepo) FindBookingByID(ctx context.Context, id int) (*domain.Booking, error) {
+	booking := &domain.Booking{}
+	err := r.DB.QueryRowContext(ctx, `
+		SELECT id, user_id, room_id, start_date, end_date, total_price, status, created_at
+		FROM bookings WHERE id = $1
+	`, id).Scan(
+		&booking.ID,
+		&booking.UserID,
+		&booking.RoomID,
+		&booking.StartDate,
+		&booking.EndDate,
+		&booking.TotalPrice,
+		&booking.Status,
+		&booking.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("booking not found: %w", domain.ErrNotFound)
+		}
+		return nil, fmt.Errorf("find booking by id: %w", err)
+	}
+	return booking, nil
+}
+
+// ListBookingsByUser returns paginated bookings for a given user.
+func (r *BookingRepo) ListBookingsByUser(ctx context.Context, userID string, page, limit int) ([]*domain.Booking, int, error) {
+	offset := (page - 1) * limit
+
+	var total int
+	if err := r.DB.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM bookings WHERE user_id = $1`, userID,
+	).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count bookings by user: %w", err)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT id, user_id, room_id, start_date, end_date, total_price, status, created_at
+		FROM bookings WHERE user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list bookings by user: %w", err)
+	}
+	defer rows.Close()
+
+	bookings, err := scanBookingRows(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return bookings, total, nil
+}
+
+// UpdateBookingStatus updates the status of a booking.
+func (r *BookingRepo) UpdateBookingStatus(ctx context.Context, id int, status string) error {
+	res, err := r.DB.ExecContext(ctx, `
+		UPDATE bookings SET status = $1 WHERE id = $2
+	`, status, id)
+	if err != nil {
+		return fmt.Errorf("update booking status: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("booking not found: %w", domain.ErrNotFound)
+	}
+	return nil
+}
+
+// CancelBooking cancels a booking and restores inventory in a transaction.
+// It verifies the booking belongs to the given userID before cancelling.
+func (r *BookingRepo) CancelBooking(ctx context.Context, id int, userID string) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction for cancel: %w", err)
+	}
+	defer tx.Rollback()
+
+	var booking domain.Booking
+	err = tx.QueryRowContext(ctx, `
+		SELECT id, user_id, room_id, start_date, end_date, status
+		FROM bookings WHERE id = $1
+	`, id).Scan(
+		&booking.ID,
+		&booking.UserID,
+		&booking.RoomID,
+		&booking.StartDate,
+		&booking.EndDate,
+		&booking.Status,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("booking not found: %w", domain.ErrNotFound)
+		}
+		return fmt.Errorf("find booking for cancel: %w", err)
+	}
+
+	if booking.UserID != userID {
+		return fmt.Errorf("booking does not belong to user: %w", domain.ErrUnauthorized)
+	}
+
+	if booking.Status == "cancelled" {
+		return fmt.Errorf("booking already cancelled: %w", domain.ErrConflict)
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE bookings SET status = 'cancelled' WHERE id = $1
+	`, id)
+	if err != nil {
+		return fmt.Errorf("cancel booking update: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		UPDATE inventory
+		SET booked_count = booked_count - 1
+		WHERE room_id = $1 AND date >= $2 AND date < $3
+	`, booking.RoomID, booking.StartDate, booking.EndDate)
+	if err != nil {
+		return fmt.Errorf("restore inventory after cancel: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit cancel transaction: %w", err)
+	}
+
+	log.Printf("Booking cancelled: id=%d, user=%s, room=%d", id, userID, booking.RoomID)
+	return nil
+}
+
+// scanBookingRows scans multiple booking rows into a slice.
+func scanBookingRows(rows *sql.Rows) ([]*domain.Booking, error) {
+	var bookings []*domain.Booking
+	for rows.Next() {
+		b := &domain.Booking{}
+		if err := rows.Scan(
+			&b.ID,
+			&b.UserID,
+			&b.RoomID,
+			&b.StartDate,
+			&b.EndDate,
+			&b.TotalPrice,
+			&b.Status,
+			&b.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan booking row: %w", err)
+		}
+		bookings = append(bookings, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate booking rows: %w", err)
+	}
+	if bookings == nil {
+		bookings = []*domain.Booking{}
+	}
+	return bookings, nil
 }
 
 // InitializeInventory creates inventory records for a room (helper for testing).
