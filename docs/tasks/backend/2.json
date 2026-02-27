@@ -3,7 +3,7 @@
   "subject": "Phase 2: Authentication & Authorization (JWT + RBAC)",
   "description": "Users register, login, get JWT tokens. Routes protected by role (guest, owner, admin). Migration for users table, JWT token manager, auth service, middleware.",
   "activeForm": "Implementing Phase 2 auth",
-  "status": "pending",
+  "status": "completed",
   "blocks": [
     "3"
   ],

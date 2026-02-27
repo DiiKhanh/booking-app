@@ -3,6 +3,7 @@ package main
 import (
 	"booking-app/internal/config"
 	"booking-app/internal/handler"
+	tokenpkg "booking-app/internal/infrastructure/jwt"
 	redisinfra "booking-app/internal/infrastructure/redis"
 	"booking-app/internal/observability"
 	"booking-app/internal/repository"
@@ -66,17 +67,29 @@ func main() {
 	// 5. Infrastructure
 	locker := redisinfra.NewRedisLocker(redisClient)
 
+	accessTTL, err := time.ParseDuration(cfg.JWTAccessTokenTTL)
+	if err != nil {
+		logger.Fatal("invalid JWT_ACCESS_TOKEN_TTL", zap.Error(err))
+	}
+	refreshTTL := 7 * 24 * time.Hour // default 7 days
+	tokenMgr := tokenpkg.NewTokenManager(cfg.JWTSecret, accessTTL, refreshTTL)
+
 	// 6. Repositories
 	bookingRepo := repository.NewBookingRepo(db, locker)
+	userRepo := repository.NewUserRepo(db)
+	tokenRepo := repository.NewTokenRepo(db)
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo)
+	authSvc := service.NewAuthService(userRepo, tokenRepo, tokenMgr)
 
 	// 8. Handlers
 	bookingHandler := handler.NewBookingHandler(bookingSvc)
+	authHandler := handler.NewAuthHandler(authSvc)
 
 	// 9. Router
-	r := router.New(bookingHandler)
+	allowedOrigins := []string{"http://localhost:3000", "http://localhost:8081"}
+	r := router.New(bookingHandler, authHandler, tokenMgr, allowedOrigins)
 
 	// 10. Server with graceful shutdown
 	srv := &http.Server{
