@@ -26,3 +26,31 @@ type TokenRepository interface {
 	RevokeRefreshToken(ctx context.Context, tokenID string, revokedAt time.Time) error
 	RevokeAllUserTokens(ctx context.Context, userID string, revokedAt time.Time) error
 }
+
+// HotelRepository defines data access operations for hotels.
+type HotelRepository interface {
+	CreateHotel(ctx context.Context, hotel *domain.Hotel) (*domain.Hotel, error)
+	GetHotelByID(ctx context.Context, id int) (*domain.Hotel, error)
+	ListApprovedHotels(ctx context.Context, page, limit int) ([]*domain.Hotel, int, error)
+	ListHotelsByOwner(ctx context.Context, ownerID string, page, limit int) ([]*domain.Hotel, int, error)
+	ListPendingHotels(ctx context.Context, page, limit int) ([]*domain.Hotel, int, error)
+	UpdateHotel(ctx context.Context, hotel *domain.Hotel) (*domain.Hotel, error)
+	UpdateHotelStatus(ctx context.Context, id int, status domain.HotelStatus) error
+	DeleteHotel(ctx context.Context, id int, ownerID string) error
+}
+
+// RoomRepository defines data access operations for rooms.
+type RoomRepository interface {
+	CreateRoom(ctx context.Context, room *domain.Room) (*domain.Room, error)
+	GetRoomByID(ctx context.Context, id int) (*domain.Room, error)
+	ListRoomsByHotel(ctx context.Context, hotelID int) ([]*domain.Room, error)
+	UpdateRoom(ctx context.Context, room *domain.Room) (*domain.Room, error)
+	DeleteRoom(ctx context.Context, id int, hotelID int) error
+}
+
+// InventoryRepository defines data access operations for room inventory.
+type InventoryRepository interface {
+	SetInventory(ctx context.Context, roomID int, date time.Time, total int) error
+	GetInventoryForRoom(ctx context.Context, roomID int, startDate, endDate time.Time) ([]*domain.Inventory, error)
+	BulkSetInventory(ctx context.Context, roomID int, startDate time.Time, days, total int) error
+}

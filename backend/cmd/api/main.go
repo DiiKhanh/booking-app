@@ -78,18 +78,28 @@ func main() {
 	bookingRepo := repository.NewBookingRepo(db, locker)
 	userRepo := repository.NewUserRepo(db)
 	tokenRepo := repository.NewTokenRepo(db)
+	hotelRepo := repository.NewHotelRepo(db)
+	roomRepo := repository.NewRoomRepo(db)
+	inventoryRepo := repository.NewInventoryRepo(db)
+	dashboardRepo := repository.NewDashboardRepo(db)
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo)
 	authSvc := service.NewAuthService(userRepo, tokenRepo, tokenMgr)
+	hotelSvc := service.NewHotelService(hotelRepo)
+	roomSvc := service.NewRoomService(roomRepo, hotelRepo)
+	inventorySvc := service.NewInventoryService(inventoryRepo, roomRepo, hotelRepo)
 
 	// 8. Handlers
 	bookingHandler := handler.NewBookingHandler(bookingSvc)
 	authHandler := handler.NewAuthHandler(authSvc)
+	hotelHandler := handler.NewHotelHandler(hotelSvc)
+	roomHandler := handler.NewRoomHandler(roomSvc, inventorySvc)
+	ownerHandler := handler.NewOwnerHandler(dashboardRepo)
 
 	// 9. Router
 	allowedOrigins := []string{"http://localhost:3000", "http://localhost:8081"}
-	r := router.New(bookingHandler, authHandler, tokenMgr, allowedOrigins)
+	r := router.New(bookingHandler, authHandler, hotelHandler, roomHandler, ownerHandler, tokenMgr, allowedOrigins)
 
 	// 10. Server with graceful shutdown
 	srv := &http.Server{

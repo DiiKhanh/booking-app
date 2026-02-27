@@ -3,7 +3,7 @@
   "subject": "Phase 3: Hotel & Room CRUD + Owner Management",
   "description": "Owners create/manage hotels+rooms. Admin approves hotels. Public views approved hotels. 17 endpoints.",
   "activeForm": "Implementing Phase 3 hotels/rooms",
-  "status": "pending",
+  "status": "completed",
   "blocks": [
     "4",
     "6",
