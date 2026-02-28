@@ -3,8 +3,16 @@ import { View, Text, TouchableOpacity } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import MapView, { Marker, type Region } from "react-native-maps";
-import Animated, { FadeInUp, FadeOutDown } from "react-native-reanimated";
+// @ts-ignore — react-native-map-clustering v4 types may conflict with React 19
+import MapView, { type Region } from "react-native-map-clustering";
+import RNMapView, { Marker } from "react-native-maps";
+import Animated, {
+  FadeInUp,
+  FadeOutDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
 import { useSearch } from "@/hooks/useSearch";
 import { useSearchHotels } from "@/hooks/useHotels";
@@ -78,23 +86,46 @@ const INITIAL_REGION: Region = {
   longitudeDelta: 10,
 };
 
-function PriceMarker({ price, currency, selected }: { price: number; currency: string; selected: boolean }) {
+function PriceMarker({
+  price,
+  currency,
+  selected,
+}: {
+  price: number;
+  currency: string;
+  selected: boolean;
+}) {
+  const scale = useSharedValue(1);
+  scale.value = withSpring(selected ? 1.15 : 1, {
+    damping: 12,
+    stiffness: 200,
+  });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <View
-      className="rounded-full px-3 py-1.5 items-center justify-center"
-      style={{
-        backgroundColor: selected ? "#FF5733" : "#1A3A6B",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 4,
-      }}
-    >
-      <Text className="text-xs text-white" style={{ fontFamily: "DMSans-Bold" }}>
-        {formatCurrency(price, currency)}
-      </Text>
-    </View>
+    <Animated.View style={animatedStyle}>
+      <View
+        className="rounded-full px-3 py-1.5 items-center justify-center"
+        style={{
+          backgroundColor: selected ? "#FF5733" : "#1A3A6B",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          elevation: 4,
+        }}
+      >
+        <Text
+          className="text-xs text-white"
+          style={{ fontFamily: "DMSans-Bold" }}
+        >
+          {formatCurrency(price, currency)}
+        </Text>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -136,17 +167,30 @@ function HotelPreviewCard({
           </Text>
           <View className="mt-1 flex-row items-center gap-1">
             <Ionicons name="star" size={12} color="#F59E0B" />
-            <Text className="text-xs" style={{ fontFamily: "Inter-Medium", color: "#F59E0B" }}>
+            <Text
+              className="text-xs"
+              style={{ fontFamily: "Inter-Medium", color: "#F59E0B" }}
+            >
               {hotel.rating.toFixed(1)}
             </Text>
-            <Text className="text-xs" style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}>
+            <Text
+              className="text-xs"
+              style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}
+            >
               · {hotel.city}
             </Text>
           </View>
-          <Text className="mt-2 text-base" style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}>
+          <Text
+            className="mt-2 text-base"
+            style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}
+          >
             {formatCurrency(hotel.priceRange.min, hotel.priceRange.currency)}
-            <Text className="text-xs" style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}>
-              {" "}/night
+            <Text
+              className="text-xs"
+              style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}
+            >
+              {" "}
+              /night
             </Text>
           </Text>
         </View>
@@ -163,7 +207,10 @@ function HotelPreviewCard({
           onPress={onView}
           className="flex-1 items-center justify-center rounded-xl border border-neutral-200 py-2.5"
         >
-          <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#1A3A6B" }}>
+          <Text
+            className="text-sm"
+            style={{ fontFamily: "Inter-Medium", color: "#1A3A6B" }}
+          >
             View Details
           </Text>
         </TouchableOpacity>
@@ -172,7 +219,10 @@ function HotelPreviewCard({
           className="flex-1 items-center justify-center rounded-xl py-2.5"
           style={{ backgroundColor: "#FF5733" }}
         >
-          <Text className="text-sm text-white" style={{ fontFamily: "Inter-Medium" }}>
+          <Text
+            className="text-sm text-white"
+            style={{ fontFamily: "Inter-Medium" }}
+          >
             Book Now
           </Text>
         </TouchableOpacity>
@@ -184,7 +234,7 @@ function HotelPreviewCard({
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<RNMapView>(null);
 
   const { query, setMapBounds } = useSearch();
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null);
@@ -196,23 +246,28 @@ export default function MapScreen() {
     (newRegion: Region) => {
       setMapBounds({
         northEast: {
-          lat: newRegion.latitude + newRegion.latitudeDelta / 2,
-          lng: newRegion.longitude + newRegion.longitudeDelta / 2,
+          latitude: newRegion.latitude + newRegion.latitudeDelta / 2,
+          longitude: newRegion.longitude + newRegion.longitudeDelta / 2,
         },
         southWest: {
-          lat: newRegion.latitude - newRegion.latitudeDelta / 2,
-          lng: newRegion.longitude - newRegion.longitudeDelta / 2,
+          latitude: newRegion.latitude - newRegion.latitudeDelta / 2,
+          longitude: newRegion.longitude - newRegion.longitudeDelta / 2,
         },
       });
     },
-    [setMapBounds]
+    [setMapBounds],
   );
 
   const handleMarkerPress = (hotel: Hotel) => {
     setSelectedHotel(hotel);
     mapRef.current?.animateToRegion(
-      { latitude: hotel.latitude, longitude: hotel.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 },
-      400
+      {
+        latitude: hotel.latitude,
+        longitude: hotel.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      },
+      400,
     );
   };
 
@@ -225,12 +280,19 @@ export default function MapScreen() {
         onRegionChangeComplete={handleRegionChange}
         showsUserLocation
         showsMyLocationButton={false}
+        clusterColor="#1A3A6B"
+        clusterTextColor="#FFFFFF"
+        radius={50}
       >
         {hotels.map((hotel) => (
           <Marker
             key={hotel.id}
-            coordinate={{ latitude: hotel.latitude, longitude: hotel.longitude }}
+            coordinate={{
+              latitude: hotel.latitude,
+              longitude: hotel.longitude,
+            }}
             onPress={() => handleMarkerPress(hotel)}
+            tracksViewChanges={false}
           >
             <PriceMarker
               price={hotel.priceRange.min}
@@ -249,7 +311,13 @@ export default function MapScreen() {
         <TouchableOpacity
           onPress={() => router.back()}
           className="h-10 w-10 items-center justify-center rounded-full bg-white"
-          style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+          style={{
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 4,
+          }}
         >
           <Ionicons name="arrow-back" size={22} color="#1E293B" />
         </TouchableOpacity>
@@ -257,19 +325,37 @@ export default function MapScreen() {
         <TouchableOpacity
           onPress={() => router.back()}
           className="flex-1 flex-row items-center rounded-xl bg-white px-4 py-2.5"
-          style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+          style={{
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 4,
+          }}
         >
           <Ionicons name="search-outline" size={18} color="#94A3B8" />
-          <Text className="ml-2 text-sm" style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}>
+          <Text
+            className="ml-2 text-sm"
+            style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}
+          >
             {query || "Search on map..."}
           </Text>
         </TouchableOpacity>
 
         <View
           className="h-10 items-center justify-center rounded-full px-4 bg-white"
-          style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 }}
+          style={{
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 4,
+          }}
         >
-          <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#1A3A6B" }}>
+          <Text
+            className="text-sm"
+            style={{ fontFamily: "Inter-Medium", color: "#1A3A6B" }}
+          >
             {hotels.length} hotels
           </Text>
         </View>
@@ -295,7 +381,9 @@ export default function MapScreen() {
       {selectedHotel && (
         <HotelPreviewCard
           hotel={selectedHotel}
-          onView={() => router.push(`/(guest)/(home)/hotel/${selectedHotel.id}`)}
+          onView={() =>
+            router.push(`/(guest)/(home)/hotel/${selectedHotel.id}`)
+          }
           onClose={() => setSelectedHotel(null)}
         />
       )}

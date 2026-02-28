@@ -1085,3 +1085,282 @@ Test credentials:
   - Owner: owner@stayease.app / Password123
   - Admin: admin@stayease.app / Password123
   - Guest: guest@test.com / Password123
+
+---
+
+## 🔍 Technical Review
+
+> **Review Date**: 2026-02-28
+> **Scope**: Full codebase audit comparing StayEase against production booking platforms (Booking.com / Agoda / Traveloka)
+> **Methodology**: Static analysis of all three modules — Backend (Go), Mobile (React Native Expo), Web (Next.js 15)
+
+---
+
+### Executive Summary
+
+| Module | Screens / Endpoints | Core Flows | Production Readiness |
+|--------|-------------------|------------|---------------------|
+| **Backend (Go)** | 59 endpoints across 10 phases | Auth, bookings, payments saga, WebSocket, search, observability | ~70% — critical inventory bug, missing idempotency |
+| **Mobile (RN Expo)** | 64 screens across 8 phases | Full guest booking flow, owner/admin panels, real-time WS | ~65% — checkout saga never triggered, race condition |
+| **Web (Next.js)** | 26+ pages across 6 phases | Owner/admin dashboards, analytics, system health | ~60% — message pages missing, auth store mismatch |
+
+**Overall platform completeness vs. Booking.com/Agoda/Traveloka**: ~65%
+The platform covers the core booking loop end-to-end (search → book → pay via saga → notify via WS). Missing: guest reviews UI, favorites, refunds, push notifications, dark mode, write-reviews flow, and several admin/owner pages.
+
+---
+
+### 1. Backend Review
+
+#### Endpoint Coverage
+
+| Domain | Endpoints | Status |
+|--------|-----------|--------|
+| Auth (register, login, refresh, logout, me) | 5 | ✅ Complete |
+| Hotels CRUD + approval + search | 9 | ✅ Complete |
+| Rooms CRUD | 5 | ✅ Complete |
+| Bookings (create, list, detail, cancel) | 4 | ✅ Complete |
+| Checkout / Payment Saga | 2 | ✅ Complete |
+| Reviews (create, list, hotel avg) | 3 | ✅ Complete |
+| Notifications (list, read, mark-read) | 3 | ✅ Complete |
+| WebSocket Hub (connect, broadcast) | 1 | ✅ Complete |
+| Admin APIs (users, stats, DLQ) | 8 | ✅ Complete |
+| Health + Metrics | 2 | ✅ Complete |
+| Booking modifications / amendments | 0 | ❌ Missing |
+| Refund / cancellation with fee logic | 0 | ❌ Missing |
+| Email delivery (confirmation, receipt) | 0 | ❌ Missing |
+| Favorites / wishlists | 0 | ❌ Missing |
+| Promo codes / discounts | 0 | ❌ Missing |
+
+#### Critical Bugs
+
+**Bug 1 — Inventory not restored on cancellation**
+- File: `backend/internal/repository/inventory.go` — `RestoreInventory()`
+- Problem: Implementation resets `available_rooms` to `0` instead of incrementing it. After a failed/cancelled booking, the room appears permanently sold out.
+- Impact: **Data corruption** — inventory diverges from reality after any failed payment or cancellation. Booking.com uses an atomic `UPDATE inventory SET available_rooms = available_rooms + 1` pattern.
+- Fix: Change the SQL from `SET available_rooms = 0` to `SET available_rooms = available_rooms + $1`.
+
+**Bug 2 — No idempotency on payment initiation**
+- File: `backend/internal/service/payment.go`
+- Problem: `StartCheckout()` has no guard against duplicate calls. If the outbox worker retries a `payment.initiated` event (e.g., after a network blip), a second charge attempt is made against the same booking.
+- Impact: **Double-charge risk**. Production payment systems (Stripe, VNPay) require an idempotency key per charge attempt.
+- Fix: Add a `processed_events` check before calling the payment gateway; use `booking_id` as the idempotency key.
+
+**Bug 3 — Booking default status mismatch**
+- File: `backend/migrations/000001_*.up.sql` (bookings table DDL)
+- Problem: The `bookings` table likely has `DEFAULT 'confirmed'` in the DB schema, but the domain saga expects `'pending'` as the initial status before checkout begins.
+- Impact: Bookings created directly via SQL tooling (Adminer) bypass the saga and appear confirmed without payment, corrupting the saga state machine.
+- Fix: Set `status DEFAULT 'pending'` in the migration and add a `CHECK (status IN ('pending', 'awaiting_payment', 'confirmed', 'failed', 'cancelled'))` constraint.
+
+#### Security Issues
+
+| Issue | Severity | Location | Recommendation |
+|-------|----------|----------|---------------|
+| JWT passed as WebSocket query param | **HIGH** | `internal/handler/ws_handler.go` | Move token to `Authorization` header during the HTTP upgrade handshake or use a short-lived ticket pattern |
+| No request body size limit | **MEDIUM** | `internal/router/router.go` | Add `http.MaxBytesReader` middleware (e.g., 1 MB limit) to prevent memory exhaustion |
+| HTML input not sanitized | **MEDIUM** | Hotel/Review create handlers | Run text fields through a sanitizer (e.g., `bluemonday`) before persisting; return 400 on script injection attempts |
+| Rate limiting is IP-based only | **MEDIUM** | `internal/middleware/rate_limit.go` | Add per-user (JWT sub) rate limiting to prevent authenticated abuse |
+| Soft deletes not implemented | **LOW** | All repositories | Use `deleted_at` timestamps instead of hard DELETE to preserve audit trails |
+
+#### Missing Features (vs. Production Platforms)
+
+- **Email notifications**: No SMTP integration. Booking.com sends confirmation emails with PDF receipts.
+- **Refund logic**: Cancellations currently just mark status; no refund record or partial-refund calculation.
+- **Booking amendments**: Guests cannot change dates or room type after confirmation.
+- **Multi-currency pricing**: All prices stored and returned as single currency with no conversion layer.
+- **Hotel photo storage**: No file upload endpoint; image URLs are free-text strings.
+- **Availability calendar**: No endpoint to return blocked dates for a room (needed for date picker UI).
+
+---
+
+### 2. Mobile Review
+
+#### Screen Coverage
+
+| Section | Screens | Status |
+|---------|---------|--------|
+| Auth (splash, login, register) | 3 | ✅ Complete |
+| Guest: Home, Search, Map, Filter | 4 | ✅ Complete |
+| Guest: Hotel Detail, Room selection | 2 | ✅ Complete |
+| Guest: Booking form, Review & Pay | 2 | ✅ Complete (bug) |
+| Guest: Processing, Confirmation | 2 | ✅ Complete (bug) |
+| Guest: My Bookings, Notifications | 2 | ✅ Complete |
+| Guest: Profile | 1 | ✅ Complete |
+| Guest: Messages (chat) | 1 | ✅ Complete |
+| Owner: Dashboard, Properties, Reservations, Analytics | 4 | ✅ Complete |
+| Owner: Messages | 1 | ✅ Complete |
+| Admin: Overview, Hotels, Users, System | 4 | ✅ Complete |
+| Dark mode | — | ❌ Not implemented |
+| Favorites / Saved hotels | — | ❌ Not implemented |
+| Write a review screen | — | ❌ Not implemented |
+| Push notifications (FCM/APNs) | — | ❌ Not implemented |
+| Apple Pay / Google Pay | — | ❌ Not implemented |
+| Offline mode / cached content | — | ❌ Not implemented |
+
+#### Critical Bugs
+
+**Bug 1 — Checkout saga never triggered from mobile**
+- File: `mobile/app/(guest)/(booking)/review-pay.tsx`
+- Problem: The "Pay Now" button calls `bookingService.create()` to create the booking record but **never calls** `paymentService.checkout()`. This means the payment saga (`POST /checkout`) is never initiated from the mobile app. The booking sits permanently at `status: pending`.
+- Impact: **Complete E2E flow breakage** — mobile guests cannot complete a payment. The saga, WebSocket notification, and processing screen are all unreachable.
+- Fix: After `bookingService.create()` succeeds, call `paymentService.checkout({ booking_id })` before navigating to the processing screen.
+
+**Bug 2 — API envelope unwrap mismatch in booking service**
+- File: `mobile/services/booking.service.ts` — `create()` method
+- Problem: Method is typed as `Promise<Booking>` but the backend returns `{success, data: Booking, error, meta}`. The caller accesses `.id` directly on the response, but should access `.data.id`.
+- Impact: `booking_id` passed to checkout and processing screens is `undefined`, causing all downstream API calls to 404.
+- Fix: Unwrap the envelope: `const booking = response.data.data; return booking;` or update the type to `Promise<ApiResponse<Booking>>` and update all call sites.
+
+**Bug 3 — WebSocket + polling race condition on processing screen**
+- File: `mobile/app/(guest)/(booking)/processing.tsx`
+- Problem: The screen starts both a React Query polling interval (`refetchInterval: 2000`) **and** a WebSocket `booking_status_updated` listener simultaneously. When payment succeeds, both the poll response and the WS message trigger `setSagaStatus()`, causing a double state update and potentially rendering the success animation twice or flashing between states.
+- Impact: UX glitch; in rare timing cases, the screen may show "failed" briefly before correcting to "confirmed".
+- Fix: Pick one mechanism. Prefer WebSocket with a fallback poll only when WS is disconnected. Cancel the polling interval when a WS update is received.
+
+#### UX Gaps vs. Agoda/Traveloka
+
+- No saved/favorite hotels (heart icon on card does nothing)
+- No review submission UI — guests can read reviews but cannot write them after a stay
+- No refund request flow for cancelled bookings
+- No date picker blocked-dates calendar (guests can select already-booked dates)
+- No Apple Pay / Google Pay integration — card form is manual
+- Currency and locale hardcoded (no multi-language support)
+
+---
+
+### 3. Web Review
+
+#### Page Coverage
+
+| Section | Pages | Status |
+|---------|-------|--------|
+| Auth: Login | 1 | ✅ Complete |
+| Owner: Dashboard, Properties, Reservations, Analytics | 5 | ✅ Complete |
+| Owner: Reservation detail `[id]` | 1 | ✅ Complete |
+| Owner: Settings | 1 | ✅ Stub only |
+| Owner: Messages | 1 | ❌ Nav link exists, page not implemented |
+| Admin: Dashboard, Hotels, Users, Bookings, Analytics | 5 | ✅ Complete |
+| Admin: Hotel detail `[id]`, User detail `[id]` | 2 | ✅ Complete |
+| Admin: System logs, DLQ | 2 | ✅ Complete |
+| Admin: Messages | 1 | ❌ Nav link exists, page not implemented |
+| Admin: Broadcast | 1 | ❌ Nav link exists, page not implemented |
+| Admin: Settings | 1 | ❌ Not implemented |
+| Live booking feed (WebSocket) | — | ❌ Hook exists, not wired into layouts |
+
+#### Incomplete Items
+
+**Item 1 — Message pages not implemented**
+- Files: `web/app/(owner)/owner/messages/page.tsx`, `web/app/(admin)/admin/messages/page.tsx`, `web/app/(admin)/admin/broadcast/page.tsx`
+- Nav links exist in `web/lib/nav-config.ts` but clicking them leads to a 404. The `ChatPanel` component and `chat.store.ts` are fully built — the pages just need to render `<ChatPanel />`.
+
+**Item 2 — Auth store / login service mismatch**
+- File: `web/stores/auth.store.ts` — `login()` action
+- Problem: Store destructures `data.token` from the login response, but `web/services/api.ts` login method likely returns `{ token, user }` as a flat object (matching the backend `data` envelope field). This means `data.token` is `undefined` and the JWT is never stored, so every page refresh logs the user out.
+- Impact: **Login broken in production** if this mismatch exists. Dev mode may mask it if using mock data fallbacks.
+- Fix: Align destructuring with the actual API response shape. Log the raw response in dev to confirm.
+
+**Item 3 — WebSocket not wired into layouts**
+- File: `web/hooks/use-realtime.ts` exists with full reconnect logic, but neither `web/app/(owner)/owner/layout.tsx` nor `web/app/(admin)/admin/layout.tsx` call `useRealtime()`.
+- Impact: Owners cannot receive live booking notifications; admin cannot see real-time system events without a page refresh.
+- Fix: Call `useRealtime()` (or `useWebSocket()`) in both layout files, identical to how the mobile guest layout wires `useRealtimeConnection`.
+
+**Item 4 — Settings pages are stubs**
+- `web/app/(owner)/owner/settings/page.tsx` and admin settings do not exist. Production platforms require profile editing, notification preferences, billing details, and API key management.
+
+#### Integration Gaps
+
+- No real-time update on the Owner Reservations table when a booking is confirmed/failed while the owner is viewing the page
+- Owner Properties page does not show room availability calendar
+- Admin analytics uses mock data only — no connection to actual backend aggregation endpoints
+- No export (CSV/PDF) for booking data in owner or admin views
+
+---
+
+### 4. Cross-Cutting Concerns
+
+#### Authentication Flow
+
+```
+Mobile:  Login → JWT stored in expo-secure-store → Axios interceptor adds Bearer header → auto-refresh on 401
+Web:     Login → JWT stored in localStorage (key: stayease-auth) → Axios interceptor → auto-refresh on 401
+Backend: JWT access token (15 min TTL) + refresh token (168 h TTL) stored in DB
+```
+
+**Issue**: Web uses `localStorage` for JWT storage, making it vulnerable to XSS. A hardened approach (e.g., HttpOnly cookie for refresh token) should be considered before production deployment.
+
+#### WebSocket Architecture
+
+```
+Backend:  gorilla/websocket Hub — per-connection write mutex (connEntry), BroadcastAll, per-user routing by userID
+Mobile:   useRealtimeConnection hook — exponential backoff (1 s → 30 s), routes by event type
+Web:      use-realtime.ts hook — backoff implemented, but not mounted in layouts
+```
+
+All three modules are architecturally aligned. The remaining work is mounting the web hook and fixing the mobile duplicate-listener bug (Bug 3 above).
+
+#### Error Handling
+
+| Layer | Status |
+|-------|--------|
+| Backend: domain sentinel errors → HTTP codes | ✅ |
+| Backend: panic recovery middleware | ✅ |
+| Mobile: ConflictRetryModal on 409 | ✅ |
+| Mobile: envelope unwrap error handling | ⚠️ Partial — see Bug 2 |
+| Web: global API error interceptor | ✅ |
+| Web: toast/alert on API errors | ✅ |
+| All: user-friendly messages (no raw stack traces) | ✅ |
+
+#### Observability
+
+| Tool | Status | Notes |
+|------|--------|-------|
+| Prometheus metrics | ✅ | HTTP request counts, duration histograms |
+| Grafana dashboards | ✅ | 3 dashboards provisioned |
+| Jaeger distributed tracing | ✅ | OTel OTLP/HTTP to Jaeger |
+| Structured logging (Zap) | ✅ | JSON logs with correlation IDs |
+| Frontend error monitoring | ❌ | No Sentry or similar integration |
+| Mobile crash reporting | ❌ | No Crashlytics or Bugsnag |
+| Alerting rules | ❌ | No Prometheus alertmanager rules |
+| SLO/SLA definitions | ❌ | No uptime targets defined |
+
+---
+
+### 5. Improvement Roadmap
+
+#### P0 — Critical Bugs (Fix Before Any Demo)
+
+| # | Issue | File | Effort |
+|---|-------|------|--------|
+| 1 | `RestoreInventory()` sets to 0 instead of incrementing | `repository/inventory.go` | 15 min |
+| 2 | Mobile: checkout saga never called after booking creation | `review-pay.tsx` | 30 min |
+| 3 | Mobile: envelope unwrap mismatch (`response.data.id` vs `response.data.data.id`) | `booking.service.ts` | 20 min |
+| 4 | Web: auth store `data.token` vs flat `{token, user}` mismatch | `stores/auth.store.ts` | 20 min |
+| 5 | Mobile: WS + polling race condition on processing screen | `processing.tsx` | 45 min |
+
+#### P1 — Security (Fix Before Production)
+
+| # | Issue | Effort |
+|---|-------|--------|
+| 1 | JWT in WebSocket query param → use ticket/header pattern | 2 h |
+| 2 | Add request body size limit middleware | 30 min |
+| 3 | Sanitize HTML input in hotel/review handlers | 1 h |
+| 4 | Web: move JWT from localStorage to HttpOnly cookie | 4 h |
+| 5 | Add per-user rate limiting (not just per-IP) | 2 h |
+
+#### P2 — Missing Features (Phase 8+ Backlog)
+
+| Feature | Scope | Effort |
+|---------|-------|--------|
+| Wire web WebSocket hook into layouts | Web | 1 h |
+| Implement Owner/Admin messages pages | Web | 4 h |
+| Add availability calendar endpoint | Backend + Mobile/Web | 1 d |
+| Add payment idempotency keys | Backend | 3 h |
+| Soft deletes for hotels/rooms/users | Backend | 4 h |
+| Write-a-review UI | Mobile + Web | 1 d |
+| Favorites/saved hotels | Mobile + Web + Backend | 2 d |
+| Refund logic + booking amendments | Backend + Mobile/Web | 3 d |
+| Email notifications (SMTP) | Backend | 1 d |
+| Push notifications (FCM/APNs) | Mobile + Backend | 2 d |
+| Dark mode | Mobile | 1 d |
+| Offline mode + cached content | Mobile | 2 d |
+| Frontend error monitoring (Sentry) | Web + Mobile | 4 h |
+| Prometheus alertmanager rules | Backend | 4 h |
