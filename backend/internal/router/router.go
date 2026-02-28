@@ -3,10 +3,13 @@ package router
 import (
 	"booking-app/internal/domain"
 	"booking-app/internal/handler"
-	"booking-app/internal/middleware"
 	tokenpkg "booking-app/internal/infrastructure/jwt"
+	"booking-app/internal/middleware"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 )
 
 // New builds and returns the configured Gin engine.
@@ -18,14 +21,27 @@ func New(
 	ownerHandler *handler.OwnerHandler,
 	tokenMgr *tokenpkg.TokenManager,
 	allowedOrigins []string,
+	healthHandler *handler.HealthHandler,
+	redisClient *redis.Client,
+	rateLimitPublic int,
+	rateLimitAuth int,
 ) *gin.Engine {
 	r := gin.New()
 
-	// Global middleware stack (order matters)
+	// Global middleware stack (order matters).
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CorrelationID())
+	r.Use(middleware.MetricsMiddleware())
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.CORS(allowedOrigins))
+
+	// Health probe endpoints — no auth, no rate limiting.
+	r.GET("/health/live", healthHandler.Live)
+	r.GET("/health/ready", healthHandler.Ready)
+	r.GET("/health/startup", healthHandler.Startup)
+
+	// Prometheus scrape endpoint — no auth.
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "pong"})
@@ -41,7 +57,7 @@ func New(
 			auth.POST("/refresh", authHandler.Refresh)
 		}
 
-		// Protected auth routes
+		// Protected auth routes.
 		authProtected := v1.Group("/auth")
 		authProtected.Use(middleware.JWTAuth(tokenMgr))
 		{
@@ -49,14 +65,19 @@ func New(
 			authProtected.GET("/me", authHandler.Me)
 		}
 
-		// ----- Public hotel routes (no auth) -----
-		v1.GET("/hotels", hotelHandler.ListHotels)
-		v1.GET("/hotels/:id", hotelHandler.GetHotel)
-		v1.GET("/hotels/:id/rooms", roomHandler.ListRoomsByHotel)
+		// ----- Public hotel routes (no auth, public rate limit) -----
+		publicGroup := v1.Group("")
+		publicGroup.Use(middleware.RateLimiter(redisClient, rateLimitPublic, time.Minute, "rl:public"))
+		{
+			publicGroup.GET("/hotels", hotelHandler.ListHotels)
+			publicGroup.GET("/hotels/:id", hotelHandler.GetHotel)
+			publicGroup.GET("/hotels/:id/rooms", roomHandler.ListRoomsByHotel)
+		}
 
-		// ----- Booking routes (JWT required) -----
+		// ----- Booking routes (JWT required + auth rate limit) -----
 		bookingGroup := v1.Group("/bookings")
 		bookingGroup.Use(middleware.JWTAuth(tokenMgr))
+		bookingGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
 		{
 			bookingGroup.POST("", bookingHandler.CreateBooking)
 			bookingGroup.GET("", bookingHandler.ListMyBookings)
@@ -65,13 +86,14 @@ func New(
 			bookingGroup.DELETE("/:id", bookingHandler.CancelBooking)
 		}
 
-		// Admin init route (kept for convenience, no auth to match original)
+		// Admin init route (no auth, matches original behaviour).
 		v1.POST("/admin/init", bookingHandler.InitializeInventory)
 
-		// ----- Owner routes (JWT + role=owner) -----
+		// ----- Owner routes (JWT + role=owner + auth rate limit) -----
 		ownerGroup := v1.Group("/owner")
 		ownerGroup.Use(middleware.JWTAuth(tokenMgr))
 		ownerGroup.Use(middleware.RequireRole(domain.RoleOwner))
+		ownerGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
 		{
 			ownerGroup.POST("/hotels", hotelHandler.CreateHotel)
 			ownerGroup.GET("/hotels", hotelHandler.ListMyHotels)
@@ -87,10 +109,11 @@ func New(
 			ownerGroup.GET("/dashboard", ownerHandler.Dashboard)
 		}
 
-		// ----- Admin routes (JWT + role=admin) -----
+		// ----- Admin routes (JWT + role=admin + auth rate limit) -----
 		adminGroup := v1.Group("/admin")
 		adminGroup.Use(middleware.JWTAuth(tokenMgr))
 		adminGroup.Use(middleware.RequireRole(domain.RoleAdmin))
+		adminGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
 		{
 			adminGroup.GET("/hotels/pending", hotelHandler.ListPendingHotels)
 			adminGroup.PUT("/hotels/:id/approve", hotelHandler.ApproveHotel)
@@ -98,8 +121,7 @@ func New(
 		}
 	}
 
-	// Legacy routes (no version prefix) — kept for backward compatibility with k6 load tests.
-	// These do NOT require JWT authentication.
+	// Legacy routes (no version prefix) — backward compatibility with k6 load tests.
 	api := r.Group("/api")
 	{
 		api.POST("/bookings", bookingHandler.CreateBookingLegacy)

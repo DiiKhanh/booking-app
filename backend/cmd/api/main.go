@@ -71,7 +71,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("invalid JWT_ACCESS_TOKEN_TTL", zap.Error(err))
 	}
-	refreshTTL := 7 * 24 * time.Hour // default 7 days
+	refreshTTL := 7 * 24 * time.Hour
 	tokenMgr := tokenpkg.NewTokenManager(cfg.JWTSecret, accessTTL, refreshTTL)
 
 	// 6. Repositories
@@ -96,10 +96,23 @@ func main() {
 	hotelHandler := handler.NewHotelHandler(hotelSvc)
 	roomHandler := handler.NewRoomHandler(roomSvc, inventorySvc)
 	ownerHandler := handler.NewOwnerHandler(dashboardRepo)
+	healthHandler := handler.NewHealthHandler(db, redisClient)
 
 	// 9. Router
 	allowedOrigins := []string{"http://localhost:3000", "http://localhost:8081"}
-	r := router.New(bookingHandler, authHandler, hotelHandler, roomHandler, ownerHandler, tokenMgr, allowedOrigins)
+	r := router.New(
+		bookingHandler,
+		authHandler,
+		hotelHandler,
+		roomHandler,
+		ownerHandler,
+		tokenMgr,
+		allowedOrigins,
+		healthHandler,
+		redisClient,
+		cfg.RateLimitPublic,
+		cfg.RateLimitAuth,
+	)
 
 	// 10. Server with graceful shutdown
 	srv := &http.Server{

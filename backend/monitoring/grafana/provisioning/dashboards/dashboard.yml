@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: 'booking-app'
+    folder: 'Booking App'
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards
