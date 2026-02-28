@@ -108,6 +108,22 @@ type NotificationRepository interface {
 	MarkAllRead(ctx context.Context, userID string) error
 }
 
+// ChatRepository defines data access operations for conversations and messages.
+type ChatRepository interface {
+	CreateConversation(ctx context.Context, conv *domain.Conversation) (*domain.Conversation, error)
+	GetConversationByID(ctx context.Context, id int64) (*domain.Conversation, error)
+	FindDirectConversation(ctx context.Context, participantA, participantB string, hotelID *int) (*domain.Conversation, error)
+	ListConversationsByUser(ctx context.Context, userID string, page, limit int) ([]*domain.Conversation, int, error)
+	UpdateLastMessageAt(ctx context.Context, conversationID int64, at time.Time) error
+
+	CreateMessage(ctx context.Context, msg *domain.Message) (*domain.Message, error)
+	ListMessagesByConversation(ctx context.Context, conversationID int64, beforeID *int64, limit int) ([]*domain.Message, error)
+	MarkMessagesRead(ctx context.Context, conversationID int64, userID string) error
+	GetUnreadCountByConversation(ctx context.Context, conversationID int64, userID string) (int, error)
+	GetTotalUnreadCount(ctx context.Context, userID string) (int, error)
+	GetLastMessage(ctx context.Context, conversationID int64) (*domain.Message, error)
+}
+
 // ReviewRepository defines data access operations for hotel reviews.
 type ReviewRepository interface {
 	// CreateReview inserts a new review and updates hotel rating stats atomically.

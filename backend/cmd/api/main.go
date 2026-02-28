@@ -100,6 +100,7 @@ func main() {
 	paymentRepo := repository.NewPaymentRepo(db)
 	outboxRepo := repository.NewOutboxRepo(db)
 	notifRepo := repository.NewNotificationRepo(db)
+	chatRepo := repository.NewChatRepo(db)
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo, roomRepo)
@@ -113,6 +114,7 @@ func main() {
 	paymentSvc := service.NewPaymentService(paymentRepo, outboxRepo, time.Now().UnixNano())
 	notifSvc := service.NewNotificationService(notifRepo)
 	adminSvc := service.NewAdminService(userRepo, bookingRepo, outboxRepo)
+	chatSvc := service.NewChatService(chatRepo, hotelRepo)
 
 	// 7b. WebSocket Hub (created before RabbitMQ so it can receive broadcasts)
 	hub := handler.NewHub()
@@ -170,7 +172,8 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, sagaOrch)
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
-	wsHandler := handler.NewWSHandler(hub, tokenMgr)
+	chatHandler := handler.NewChatHandler(chatSvc, hub)
+	wsHandler := handler.NewWSHandler(hub, tokenMgr, handler.WithChatService(chatSvc))
 	adminHandler := handler.NewAdminHandler(adminSvc)
 
 	// 8b. Optional distributed tracing (graceful degradation).
@@ -208,6 +211,7 @@ func main() {
 		notifHandler,
 		wsHandler,
 		adminHandler,
+		chatHandler,
 	)
 
 	// 10. Server with graceful shutdown

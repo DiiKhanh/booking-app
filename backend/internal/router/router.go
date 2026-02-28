@@ -31,6 +31,7 @@ func New(
 	notificationHandler *handler.NotificationHandler,
 	wsHandler *handler.WSHandler,
 	adminHandler *handler.AdminHandler,
+	chatHandler *handler.ChatHandler,
 ) *gin.Engine {
 	r := gin.New()
 
@@ -164,6 +165,29 @@ func New(
 			// Phase 10: DLQ management
 			adminGroup.GET("/events/dlq", adminHandler.ListDLQEvents)
 			adminGroup.POST("/events/dlq/:id/retry", adminHandler.RetryDLQEvent)
+
+			// Chat broadcast
+			adminGroup.POST("/broadcast", chatHandler.BroadcastAnnouncement)
+		}
+
+		// ----- Chat routes (JWT required + auth rate limit) -----
+		chatGroup := v1.Group("/conversations")
+		chatGroup.Use(middleware.JWTAuth(tokenMgr))
+		chatGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
+		{
+			chatGroup.POST("", chatHandler.CreateConversation)
+			chatGroup.GET("", chatHandler.ListConversations)
+			chatGroup.GET("/:id/messages", chatHandler.ListMessages)
+			chatGroup.POST("/:id/messages", chatHandler.SendMessage)
+			chatGroup.PUT("/:id/read", chatHandler.MarkRead)
+		}
+
+		// Unread count (separate path prefix to avoid conflict with conversation :id routes).
+		chatUnread := v1.Group("/chat")
+		chatUnread.Use(middleware.JWTAuth(tokenMgr))
+		chatUnread.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
+		{
+			chatUnread.GET("/unread-count", chatHandler.UnreadCount)
 		}
 
 		// ----- Notification routes (JWT required + auth rate limit) -----
