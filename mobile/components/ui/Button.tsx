@@ -2,8 +2,10 @@ import {
   TouchableOpacity,
   Text,
   ActivityIndicator,
+  Platform,
   type TouchableOpacityProps,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger";
 type ButtonSize = "sm" | "md" | "lg";
@@ -60,12 +62,20 @@ export function Button({
 }: ButtonProps) {
   const isDisabled = disabled || loading;
 
+  const handlePress: TouchableOpacityProps["onPress"] = (e) => {
+    if (!isDisabled && Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    props.onPress?.(e);
+  };
+
   return (
     <TouchableOpacity
       className={`flex-row items-center justify-center rounded-md ${variantStyles[variant]} ${sizeStyles[size]} ${fullWidth ? "w-full" : ""} ${isDisabled ? "opacity-50" : ""} ${className ?? ""}`}
       disabled={isDisabled}
       activeOpacity={0.7}
       {...props}
+      onPress={handlePress}
     >
       {loading ? (
         <ActivityIndicator

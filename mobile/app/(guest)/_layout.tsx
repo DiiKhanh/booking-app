@@ -1,84 +1,140 @@
+import { useEffect } from "react";
 import { Tabs } from "expo-router";
-import { View, Text, Platform } from "react-native";
+import { View, Text, Platform, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
 
 import { useNotifications } from "@/hooks/useNotifications";
 import { useRealtimeConnection } from "@/hooks/useRealtimeConnection";
 
-const TAB_ICON_SIZE = 22;
+const ACTIVE_COLOR = "#1A3A6B";
+const INACTIVE_COLOR = "#94A3B8";
+const PILL_COLOR = "#1A3A6B";
+const ICON_SIZE = 22;
 
-function TabBarIcon({
-  name,
-  color,
-  focused,
-}: {
+interface MomoTabIconProps {
   readonly name: keyof typeof Ionicons.glyphMap;
-  readonly color: string;
   readonly focused: boolean;
-}) {
+  readonly badge?: number;
+}
+
+function MomoTabIcon({ name, focused, badge }: MomoTabIconProps) {
+  const pillOpacity = useSharedValue(focused ? 1 : 0);
+  const pillScale = useSharedValue(focused ? 1 : 0.75);
+  const iconScale = useSharedValue(focused ? 1 : 0.88);
+
+  useEffect(() => {
+    pillOpacity.value = withSpring(focused ? 1 : 0, {
+      damping: 18,
+      stiffness: 320,
+    });
+    pillScale.value = withSpring(focused ? 1 : 0.75, {
+      damping: 14,
+      stiffness: 280,
+    });
+    iconScale.value = withSpring(focused ? 1 : 0.88, {
+      damping: 12,
+      stiffness: 250,
+    });
+  }, [focused]);
+
+  const pillStyle = useAnimatedStyle(() => ({
+    opacity: pillOpacity.value,
+    transform: [{ scale: pillScale.value }],
+  }));
+
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: iconScale.value }],
+  }));
+
+  const outlineName =
+    `${name}-outline` as keyof typeof Ionicons.glyphMap;
+
   return (
-    <View className="items-center justify-center pt-1.5">
-      {focused && (
-        <View
-          className="absolute -top-0.5 h-1 w-5 rounded-full"
-          style={{ backgroundColor: "#FF5733" }}
+    <View style={styles.iconWrapper}>
+      {/* Animated pill background */}
+      <Animated.View style={[styles.pill, pillStyle]} />
+
+      {/* Icon */}
+      <Animated.View style={iconStyle}>
+        <Ionicons
+          name={focused ? name : outlineName}
+          size={ICON_SIZE}
+          color={focused ? "#FFFFFF" : INACTIVE_COLOR}
         />
-      )}
-      <Ionicons name={name} size={TAB_ICON_SIZE} color={color} />
+      </Animated.View>
+
+      {/* Notification badge */}
+      {badge !== undefined && badge > 0 ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {badge > 99 ? "99+" : badge}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 export default function GuestLayout() {
   const { unreadCount } = useNotifications();
-  // Establish WebSocket connection for real-time booking status + notifications.
   useRealtimeConnection();
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#FF5733",
-        tabBarInactiveTintColor: "#94A3B8",
+        tabBarActiveTintColor: ACTIVE_COLOR,
+        tabBarInactiveTintColor: INACTIVE_COLOR,
         tabBarStyle: {
           position: "absolute",
           backgroundColor:
-            Platform.OS === "ios" ? "rgba(255, 255, 255, 0.85)" : "#FFFFFF",
+            Platform.OS === "ios" ? "transparent" : "#FFFFFF",
           borderTopWidth: 0,
           elevation: 0,
           height: Platform.OS === "ios" ? 88 : 68,
-          paddingBottom: Platform.OS === "ios" ? 28 : 10,
+          paddingBottom: Platform.OS === "ios" ? 26 : 10,
           paddingTop: 8,
           shadowColor: "#0F172A",
           shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.06,
-          shadowRadius: 16,
+          shadowOpacity: 0.07,
+          shadowRadius: 20,
           ...(Platform.OS === "android" && {
             borderTopColor: "#F1F5F9",
             borderTopWidth: 1,
           }),
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontFamily: "Inter-Medium",
-          marginTop: 2,
+          marginTop: 3,
+          letterSpacing: 0.2,
         },
         tabBarItemStyle: {
-          paddingTop: 4,
+          paddingTop: 2,
         },
+        // iOS blur effect underneath
+        tabBarBackground: () =>
+          Platform.OS === "ios" ? (
+            <BlurView
+              intensity={90}
+              tint="light"
+              style={StyleSheet.absoluteFillObject}
+            />
+          ) : null,
       }}
     >
       <Tabs.Screen
         name="(home)"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name={focused ? "home" : "home-outline"}
-              color={color}
-              focused={focused}
-            />
+          tabBarIcon: ({ focused }) => (
+            <MomoTabIcon name="home" focused={focused} />
           ),
         }}
       />
@@ -86,12 +142,8 @@ export default function GuestLayout() {
         name="(search)"
         options={{
           title: "Search",
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name={focused ? "search" : "search-outline"}
-              color={color}
-              focused={focused}
-            />
+          tabBarIcon: ({ focused }) => (
+            <MomoTabIcon name="search" focused={focused} />
           ),
         }}
       />
@@ -99,12 +151,8 @@ export default function GuestLayout() {
         name="(bookings)"
         options={{
           title: "Bookings",
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name={focused ? "receipt" : "receipt-outline"}
-              color={color}
-              focused={focused}
-            />
+          tabBarIcon: ({ focused }) => (
+            <MomoTabIcon name="receipt" focused={focused} />
           ),
         }}
       />
@@ -112,27 +160,12 @@ export default function GuestLayout() {
         name="(notifications)"
         options={{
           title: "Alerts",
-          tabBarIcon: ({ color, focused }) => (
-            <View>
-              <TabBarIcon
-                name={focused ? "notifications" : "notifications-outline"}
-                color={color}
-                focused={focused}
-              />
-              {unreadCount > 0 && (
-                <View
-                  className="absolute -right-2.5 -top-0.5 h-[18px] min-w-[18px] items-center justify-center rounded-full px-1"
-                  style={{ backgroundColor: "#FF5733" }}
-                >
-                  <Text
-                    className="text-[10px] text-white"
-                    style={{ fontFamily: "PlusJakartaSans-SemiBold" }}
-                  >
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </View>
+          tabBarIcon: ({ focused }) => (
+            <MomoTabIcon
+              name="notifications"
+              focused={focused}
+              badge={unreadCount}
+            />
           ),
         }}
       />
@@ -140,15 +173,46 @@ export default function GuestLayout() {
         name="(profile)"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon
-              name={focused ? "person" : "person-outline"}
-              color={color}
-              focused={focused}
-            />
+          tabBarIcon: ({ focused }) => (
+            <MomoTabIcon name="person" focused={focused} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconWrapper: {
+    width: 52,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pill: {
+    position: "absolute",
+    width: 52,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: PILL_COLOR,
+  },
+  badge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#FF5733",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+  badgeText: {
+    fontSize: 9,
+    color: "#FFFFFF",
+    fontFamily: "PlusJakartaSans-SemiBold",
+  },
+});
