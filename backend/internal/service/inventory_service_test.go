@@ -11,9 +11,10 @@ import (
 // --- Mock InventoryRepository ---
 
 type mockInventoryRepo struct {
-	setInventoryFn        func(ctx context.Context, roomID int, date time.Time, total int) error
-	getInventoryFn        func(ctx context.Context, roomID int, startDate, endDate time.Time) ([]*domain.Inventory, error)
-	bulkSetInventoryFn    func(ctx context.Context, roomID int, startDate time.Time, days, total int) error
+	setInventoryFn              func(ctx context.Context, roomID int, date time.Time, total int) error
+	getInventoryFn              func(ctx context.Context, roomID int, startDate, endDate time.Time) ([]*domain.Inventory, error)
+	bulkSetInventoryFn          func(ctx context.Context, roomID int, startDate time.Time, days, total int) error
+	bulkDecrementBookedCountFn  func(ctx context.Context, roomID int, startDate time.Time, days, amount int) error
 }
 
 func (m *mockInventoryRepo) SetInventory(ctx context.Context, roomID int, date time.Time, total int) error {
@@ -26,6 +27,13 @@ func (m *mockInventoryRepo) GetInventoryForRoom(ctx context.Context, roomID int,
 
 func (m *mockInventoryRepo) BulkSetInventory(ctx context.Context, roomID int, startDate time.Time, days, total int) error {
 	return m.bulkSetInventoryFn(ctx, roomID, startDate, days, total)
+}
+
+func (m *mockInventoryRepo) BulkDecrementBookedCount(ctx context.Context, roomID int, startDate time.Time, days, amount int) error {
+	if m.bulkDecrementBookedCountFn != nil {
+		return m.bulkDecrementBookedCountFn(ctx, roomID, startDate, days, amount)
+	}
+	return nil
 }
 
 // --- Tests: SetInventoryRange ---
@@ -145,5 +153,72 @@ func TestInventoryService_GetInventoryRange_InvalidDateRange(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected error when start > end")
+	}
+}
+
+// --- Tests: RestoreInventory ---
+
+// TestInventoryService_RestoreInventory_DecrementsBookedCount verifies that
+// RestoreInventory calls BulkDecrementBookedCount (not BulkSetInventory) so that
+// available_rooms is restored by decrementing booked_count atomically.
+// This test was written FIRST (RED phase) to catch the original bug where
+// BulkSetInventory was called, which corrupted total_inventory instead of restoring slots.
+func TestInventoryService_RestoreInventory_DecrementsBookedCount(t *testing.T) {
+	start := time.Now().Truncate(24 * time.Hour)
+	end := start.AddDate(0, 0, 3)
+
+	var decrementCalled bool
+	var gotRoomID, gotDays, gotAmount int
+	var gotStart time.Time
+
+	inventoryRepo := &mockInventoryRepo{
+		bulkDecrementBookedCountFn: func(ctx context.Context, roomID int, startDate time.Time, days, amount int) error {
+			decrementCalled = true
+			gotRoomID = roomID
+			gotStart = startDate
+			gotDays = days
+			gotAmount = amount
+			return nil
+		},
+		// BulkSetInventory must NOT be called during RestoreInventory.
+		bulkSetInventoryFn: func(ctx context.Context, roomID int, startDate time.Time, days, total int) error {
+			t.Errorf("RestoreInventory must not call BulkSetInventory; got roomID=%d days=%d total=%d", roomID, days, total)
+			return nil
+		},
+	}
+	svc := service.NewInventoryService(inventoryRepo, &mockRoomRepo{}, &mockHotelRepo{})
+
+	err := svc.RestoreInventory(context.Background(), 42, start, end)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !decrementCalled {
+		t.Fatal("expected BulkDecrementBookedCount to be called")
+	}
+	if gotRoomID != 42 {
+		t.Errorf("expected roomID 42, got %d", gotRoomID)
+	}
+	if !gotStart.Equal(start) {
+		t.Errorf("expected startDate %v, got %v", start, gotStart)
+	}
+	if gotDays != 3 {
+		t.Errorf("expected 3 days, got %d", gotDays)
+	}
+	if gotAmount != 1 {
+		t.Errorf("expected decrement amount 1 (one booking slot), got %d", gotAmount)
+	}
+}
+
+func TestInventoryService_RestoreInventory_InvalidDateRange(t *testing.T) {
+	svc := service.NewInventoryService(&mockInventoryRepo{}, &mockRoomRepo{}, &mockHotelRepo{})
+
+	start := time.Now()
+	end := start // same day → 0 days
+
+	err := svc.RestoreInventory(context.Background(), 1, start, end)
+
+	if err == nil {
+		t.Error("expected error for zero-day date range")
 	}
 }

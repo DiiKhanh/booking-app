@@ -85,6 +85,10 @@ type InventoryRepository interface {
 	SetInventory(ctx context.Context, roomID int, date time.Time, total int) error
 	GetInventoryForRoom(ctx context.Context, roomID int, startDate, endDate time.Time) ([]*domain.Inventory, error)
 	BulkSetInventory(ctx context.Context, roomID int, startDate time.Time, days, total int) error
+	// BulkDecrementBookedCount atomically decrements booked_count by amount for each
+	// day in the range [startDate, startDate+days). Used by the payment saga to restore
+	// inventory when a payment fails or times out. Never goes below zero.
+	BulkDecrementBookedCount(ctx context.Context, roomID int, startDate time.Time, days, amount int) error
 }
 
 // SearchRepository defines hotel search operations backed by Elasticsearch.

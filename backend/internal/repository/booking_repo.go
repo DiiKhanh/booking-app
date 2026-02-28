@@ -81,7 +81,7 @@ func (r *BookingRepo) CreateBooking(ctx context.Context, booking *domain.Booking
 
 	err = tx.QueryRowContext(ctx, `
 		INSERT INTO bookings (user_id, room_id, start_date, end_date, total_price, status)
-		VALUES ($1, $2, $3, $4, $5, 'confirmed')
+		VALUES ($1, $2, $3, $4, $5, 'pending')
 		RETURNING id, created_at
 	`, booking.UserID, booking.RoomID, booking.StartDate, booking.EndDate, booking.TotalPrice).
 		Scan(&booking.ID, &booking.CreatedAt)

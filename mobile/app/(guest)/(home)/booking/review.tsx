@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +16,12 @@ import { ConflictRetryModal } from "@/components/booking/ConflictRetryModal";
 import { useBookingFlow } from "@/hooks/useBookingFlow";
 import { useConflictRetry } from "@/hooks/useConflictRetry";
 import { bookingService } from "@/services/booking.service";
-import { formatCurrency, calculateNights, formatDateRange } from "@/utils/format";
+import { paymentService } from "@/services/payment.service";
+import {
+  formatCurrency,
+  calculateNights,
+  formatDateRange,
+} from "@/utils/format";
 
 type CardNetwork = "visa" | "mastercard" | "amex";
 
@@ -46,7 +57,12 @@ export default function BookingReviewScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { draft, updateSagaStatus, setCurrentBookingId } = useBookingFlow();
-  const { conflictVisible, retrying, handleConflict, retry, dismiss } = useConflictRetry();
+  const {
+    showConflictModal: conflictVisible,
+    isRetrying: retrying,
+    executeWithRetry,
+    dismissConflict: dismiss,
+  } = useConflictRetry();
 
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -64,21 +80,23 @@ export default function BookingReviewScreen() {
 
   const bookMutation = useMutation({
     mutationFn: () =>
-      bookingService.create({
-        roomId: draft!.roomId,
-        checkIn: draft!.checkIn,
-        checkOut: draft!.checkOut,
-        guests: draft!.guests,
+      executeWithRetry(async () => {
+        const booking = await bookingService.create({
+          roomId: draft!.roomId,
+          checkIn: draft!.checkIn,
+          checkOut: draft!.checkOut,
+          guests: draft!.guests,
+        });
+        await paymentService.checkout({
+          bookingId: booking.id,
+          paymentMethod: "card",
+        });
+        return booking;
       }),
-    onSuccess: (data) => {
-      setCurrentBookingId(data.data?.id ?? "");
-      updateSagaStatus("pending");
+    onSuccess: (booking) => {
+      setCurrentBookingId(booking.id);
+      updateSagaStatus("awaiting_payment");
       router.push("/(guest)/(home)/booking/processing");
-    },
-    onError: (err: { status?: number }) => {
-      if (err?.status === 409) {
-        handleConflict();
-      }
     },
   });
 
@@ -95,7 +113,7 @@ export default function BookingReviewScreen() {
   };
 
   const handleRetry = async () => {
-    await retry(() => bookMutation.mutateAsync());
+    await executeWithRetry(() => bookMutation.mutateAsync());
   };
 
   return (
@@ -108,7 +126,10 @@ export default function BookingReviewScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#1E293B" />
         </TouchableOpacity>
-        <Text className="ml-4 text-lg text-neutral-900" style={{ fontFamily: "PlusJakartaSans-SemiBold" }}>
+        <Text
+          className="ml-4 text-lg text-neutral-900"
+          style={{ fontFamily: "PlusJakartaSans-SemiBold" }}
+        >
           Review & Pay
         </Text>
       </View>
@@ -116,12 +137,21 @@ export default function BookingReviewScreen() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Booking Summary */}
         <View className="mx-6 mt-5">
-          <Text className="mb-3 text-sm text-neutral-500 uppercase tracking-wide" style={{ fontFamily: "Inter-Medium" }}>
+          <Text
+            className="mb-3 text-sm text-neutral-500 uppercase tracking-wide"
+            style={{ fontFamily: "Inter-Medium" }}
+          >
             Booking Summary
           </Text>
           <View
             className="rounded-2xl border border-neutral-100 overflow-hidden"
-            style={{ shadowColor: "#0F172A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 }}
+            style={{
+              shadowColor: "#0F172A",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.04,
+              shadowRadius: 8,
+              elevation: 1,
+            }}
           >
             {/* Hotel/Room */}
             <View className="flex-row items-start gap-4 p-4 border-b border-neutral-50">
@@ -129,10 +159,16 @@ export default function BookingReviewScreen() {
                 <Ionicons name="business-outline" size={24} color="#94A3B8" />
               </View>
               <View className="flex-1">
-                <Text className="text-base text-neutral-900" style={{ fontFamily: "PlusJakartaSans-SemiBold" }}>
+                <Text
+                  className="text-base text-neutral-900"
+                  style={{ fontFamily: "PlusJakartaSans-SemiBold" }}
+                >
                   {draft?.roomName}
                 </Text>
-                <Text className="text-sm" style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}>
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}
+                >
                   {draft?.hotelName}
                 </Text>
               </View>
@@ -143,27 +179,51 @@ export default function BookingReviewScreen() {
               <View className="flex-row justify-between items-center">
                 <View className="flex-row items-center gap-2">
                   <Ionicons name="calendar-outline" size={16} color="#94A3B8" />
-                  <Text className="text-sm" style={{ fontFamily: "Inter-Regular", color: "#64748B" }}>Dates</Text>
+                  <Text
+                    className="text-sm"
+                    style={{ fontFamily: "Inter-Regular", color: "#64748B" }}
+                  >
+                    Dates
+                  </Text>
                 </View>
-                <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#334155" }}>
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Medium", color: "#334155" }}
+                >
                   {draft ? formatDateRange(draft.checkIn, draft.checkOut) : "—"}
                 </Text>
               </View>
               <View className="flex-row justify-between items-center">
                 <View className="flex-row items-center gap-2">
                   <Ionicons name="moon-outline" size={16} color="#94A3B8" />
-                  <Text className="text-sm" style={{ fontFamily: "Inter-Regular", color: "#64748B" }}>Duration</Text>
+                  <Text
+                    className="text-sm"
+                    style={{ fontFamily: "Inter-Regular", color: "#64748B" }}
+                  >
+                    Duration
+                  </Text>
                 </View>
-                <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#334155" }}>
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Medium", color: "#334155" }}
+                >
                   {nights} night{nights !== 1 ? "s" : ""}
                 </Text>
               </View>
               <View className="flex-row justify-between items-center">
                 <View className="flex-row items-center gap-2">
                   <Ionicons name="people-outline" size={16} color="#94A3B8" />
-                  <Text className="text-sm" style={{ fontFamily: "Inter-Regular", color: "#64748B" }}>Guests</Text>
+                  <Text
+                    className="text-sm"
+                    style={{ fontFamily: "Inter-Regular", color: "#64748B" }}
+                  >
+                    Guests
+                  </Text>
                 </View>
-                <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#334155" }}>
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Medium", color: "#334155" }}
+                >
                   {draft?.guests ?? 1}
                 </Text>
               </View>
@@ -173,32 +233,57 @@ export default function BookingReviewScreen() {
 
         {/* Price Breakdown */}
         <View className="mx-6 mt-5">
-          <Text className="mb-3 text-sm text-neutral-500 uppercase tracking-wide" style={{ fontFamily: "Inter-Medium" }}>
+          <Text
+            className="mb-3 text-sm text-neutral-500 uppercase tracking-wide"
+            style={{ fontFamily: "Inter-Medium" }}
+          >
             Price Breakdown
           </Text>
-          <View className="rounded-2xl" style={{ backgroundColor: "#F8FAFC", padding: 16 }}>
+          <View
+            className="rounded-2xl"
+            style={{ backgroundColor: "#F8FAFC", padding: 16 }}
+          >
             <View className="gap-3">
               <View className="flex-row justify-between">
-                <Text className="text-sm" style={{ fontFamily: "Inter-Regular", color: "#64748B" }}>
-                  {formatCurrency(draft?.pricePerNight ?? 0, currency)} × {nights} nights
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Regular", color: "#64748B" }}
+                >
+                  {formatCurrency(draft?.pricePerNight ?? 0, currency)} ×{" "}
+                  {nights} nights
                 </Text>
-                <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#334155" }}>
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Medium", color: "#334155" }}
+                >
                   {formatCurrency(subtotal, currency)}
                 </Text>
               </View>
               <View className="flex-row justify-between">
-                <Text className="text-sm" style={{ fontFamily: "Inter-Regular", color: "#64748B" }}>
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Regular", color: "#64748B" }}
+                >
                   Taxes & fees (10%)
                 </Text>
-                <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#334155" }}>
+                <Text
+                  className="text-sm"
+                  style={{ fontFamily: "Inter-Medium", color: "#334155" }}
+                >
                   {formatCurrency(taxes, currency)}
                 </Text>
               </View>
               <View className="border-t border-neutral-200 pt-3 flex-row justify-between">
-                <Text className="text-base text-neutral-900" style={{ fontFamily: "PlusJakartaSans-SemiBold" }}>
+                <Text
+                  className="text-base text-neutral-900"
+                  style={{ fontFamily: "PlusJakartaSans-SemiBold" }}
+                >
                   Total
                 </Text>
-                <Text className="text-xl" style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}>
+                <Text
+                  className="text-xl"
+                  style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}
+                >
                   {formatCurrency(total, currency)}
                 </Text>
               </View>
@@ -208,13 +293,19 @@ export default function BookingReviewScreen() {
 
         {/* Payment Form */}
         <View className="mx-6 mt-5">
-          <Text className="mb-3 text-sm text-neutral-500 uppercase tracking-wide" style={{ fontFamily: "Inter-Medium" }}>
+          <Text
+            className="mb-3 text-sm text-neutral-500 uppercase tracking-wide"
+            style={{ fontFamily: "Inter-Medium" }}
+          >
             Payment Details
           </Text>
 
           {/* Card Number */}
           <View className="mb-3 rounded-2xl border border-neutral-200 px-4 py-3">
-            <Text className="mb-1.5 text-xs" style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}>
+            <Text
+              className="mb-1.5 text-xs"
+              style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}
+            >
               Card Number
             </Text>
             <View className="flex-row items-center">
@@ -229,8 +320,14 @@ export default function BookingReviewScreen() {
                 maxLength={19}
               />
               {cardNetwork && (
-                <View className="ml-2 h-7 w-11 items-center justify-center rounded-md" style={{ backgroundColor: "#F1F5F9" }}>
-                  <Text className="text-xs font-bold" style={{ color: "#1A3A6B" }}>
+                <View
+                  className="ml-2 h-7 w-11 items-center justify-center rounded-md"
+                  style={{ backgroundColor: "#F1F5F9" }}
+                >
+                  <Text
+                    className="text-xs font-bold"
+                    style={{ color: "#1A3A6B" }}
+                  >
                     {cardNetwork.toUpperCase()}
                   </Text>
                 </View>
@@ -241,7 +338,10 @@ export default function BookingReviewScreen() {
           {/* Expiry + CVV */}
           <View className="mb-3 flex-row gap-3">
             <View className="flex-1 rounded-2xl border border-neutral-200 px-4 py-3">
-              <Text className="mb-1.5 text-xs" style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}>
+              <Text
+                className="mb-1.5 text-xs"
+                style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}
+              >
                 Expiry Date
               </Text>
               <TextInput
@@ -256,7 +356,10 @@ export default function BookingReviewScreen() {
               />
             </View>
             <View className="flex-1 rounded-2xl border border-neutral-200 px-4 py-3">
-              <Text className="mb-1.5 text-xs" style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}>
+              <Text
+                className="mb-1.5 text-xs"
+                style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}
+              >
                 CVV
               </Text>
               <TextInput
@@ -275,7 +378,10 @@ export default function BookingReviewScreen() {
 
           {/* Card Holder */}
           <View className="mb-4 rounded-2xl border border-neutral-200 px-4 py-3">
-            <Text className="mb-1.5 text-xs" style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}>
+            <Text
+              className="mb-1.5 text-xs"
+              style={{ fontFamily: "Inter-Medium", color: "#94A3B8" }}
+            >
               Card Holder Name
             </Text>
             <TextInput
@@ -292,7 +398,10 @@ export default function BookingReviewScreen() {
           {/* Secure badge */}
           <View className="flex-row items-center gap-2 mb-4">
             <Ionicons name="lock-closed" size={14} color="#10B981" />
-            <Text className="text-xs" style={{ fontFamily: "Inter-Regular", color: "#64748B" }}>
+            <Text
+              className="text-xs"
+              style={{ fontFamily: "Inter-Regular", color: "#64748B" }}
+            >
               Your payment is secured with 256-bit SSL encryption
             </Text>
           </View>
@@ -311,13 +420,26 @@ export default function BookingReviewScreen() {
                 borderColor: agreedToTerms ? "#FF5733" : "#CBD5E1",
               }}
             >
-              {agreedToTerms && <Ionicons name="checkmark" size={12} color="#fff" />}
+              {agreedToTerms && (
+                <Ionicons name="checkmark" size={12} color="#fff" />
+              )}
             </View>
-            <Text className="flex-1 text-sm" style={{ fontFamily: "Inter-Regular", color: "#64748B", lineHeight: 20 }}>
+            <Text
+              className="flex-1 text-sm"
+              style={{
+                fontFamily: "Inter-Regular",
+                color: "#64748B",
+                lineHeight: 20,
+              }}
+            >
               I agree to the{" "}
-              <Text style={{ color: "#FF5733", fontFamily: "Inter-Medium" }}>Terms of Service</Text>
-              {" "}and{" "}
-              <Text style={{ color: "#FF5733", fontFamily: "Inter-Medium" }}>Cancellation Policy</Text>
+              <Text style={{ color: "#FF5733", fontFamily: "Inter-Medium" }}>
+                Terms of Service
+              </Text>{" "}
+              and{" "}
+              <Text style={{ color: "#FF5733", fontFamily: "Inter-Medium" }}>
+                Cancellation Policy
+              </Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -326,9 +448,16 @@ export default function BookingReviewScreen() {
       </ScrollView>
 
       {/* CTA */}
-      <View className="border-t border-neutral-100 px-6 pt-4" style={{ paddingBottom: insets.bottom + 16 }}>
+      <View
+        className="border-t border-neutral-100 px-6 pt-4"
+        style={{ paddingBottom: insets.bottom + 16 }}
+      >
         <Button
-          title={bookMutation.isPending ? "Processing..." : `Pay ${formatCurrency(total, currency)}`}
+          title={
+            bookMutation.isPending
+              ? "Processing..."
+              : `Pay ${formatCurrency(total, currency)}`
+          }
           fullWidth
           size="lg"
           onPress={handleConfirm}

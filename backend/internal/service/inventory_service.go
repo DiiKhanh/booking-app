@@ -76,13 +76,13 @@ func (s *InventoryService) GetInventoryRange(
 	return s.inventoryRepo.GetInventoryForRoom(ctx, roomID, startDate, endDate)
 }
 
-// RestoreInventory increments inventory for a room over a date range by 1 unit.
-// Used by the payment saga when a payment fails or times out.
+// RestoreInventory decrements booked_count by 1 for each day in [startDate, endDate).
+// Used by the payment saga when a payment fails or times out. This is the correct
+// inverse of CreateBooking's "booked_count = booked_count + 1" operation.
 func (s *InventoryService) RestoreInventory(ctx context.Context, roomID int, startDate, endDate time.Time) error {
 	days := int(endDate.Sub(startDate).Hours() / 24)
 	if days <= 0 {
 		return fmt.Errorf("invalid date range for inventory restore: %w", domain.ErrBadRequest)
 	}
-	// Restore 1 slot per day.
-	return s.inventoryRepo.BulkSetInventory(ctx, roomID, startDate, days, 1)
+	return s.inventoryRepo.BulkDecrementBookedCount(ctx, roomID, startDate, days, 1)
 }

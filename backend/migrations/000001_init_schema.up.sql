@@ -31,7 +31,7 @@ CREATE TABLE bookings (
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     total_price DECIMAL(10, 2) NOT NULL,
-    status VARCHAR(50) DEFAULT 'confirmed', -- confirmed, cancelled
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'awaiting_payment', 'confirmed', 'failed', 'cancelled')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

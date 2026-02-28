@@ -531,6 +531,34 @@ func (r *pgInventoryRepo) GetInventoryForRoom(ctx context.Context, roomID int, s
 	return invs, nil
 }
 
+// BulkDecrementBookedCount decrements booked_count by amount for each day in [startDate, startDate+days).
+// Uses GREATEST(0, booked_count - amount) to prevent negative values.
+// This is the correct way to restore inventory after a failed or timed-out payment.
+func (r *pgInventoryRepo) BulkDecrementBookedCount(ctx context.Context, roomID int, startDate time.Time, days, amount int) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx for bulk decrement: %w", err)
+	}
+	defer tx.Rollback()
+
+	const q = `
+		UPDATE inventory
+		SET booked_count = GREATEST(0, booked_count - $3)
+		WHERE room_id = $1 AND date = $2`
+
+	for i := 0; i < days; i++ {
+		date := startDate.AddDate(0, 0, i)
+		if _, err := tx.ExecContext(ctx, q, roomID, date, amount); err != nil {
+			return fmt.Errorf("bulk decrement booked_count day %d: %w", i, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit bulk decrement: %w", err)
+	}
+	return nil
+}
+
 // BulkSetInventory upserts inventory for a contiguous range of days starting from startDate.
 func (r *pgInventoryRepo) BulkSetInventory(ctx context.Context, roomID int, startDate time.Time, days, total int) error {
 	tx, err := r.db.BeginTx(ctx, nil)

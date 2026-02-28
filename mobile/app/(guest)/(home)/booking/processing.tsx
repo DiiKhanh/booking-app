@@ -7,16 +7,34 @@ import { Ionicons } from "@expo/vector-icons";
 import { useBookingFlow } from "@/hooks/useBookingFlow";
 import { useBookingStatus } from "@/hooks/useBookings";
 
-type Step = { key: string; label: string; icon: keyof typeof Ionicons.glyphMap };
+type Step = {
+  key: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
 
 const STEPS: Step[] = [
   { key: "pending", label: "Reservation created", icon: "receipt-outline" },
-  { key: "awaiting_payment", label: "Processing payment", icon: "card-outline" },
-  { key: "processing", label: "Confirming with hotel", icon: "business-outline" },
+  {
+    key: "awaiting_payment",
+    label: "Processing payment",
+    icon: "card-outline",
+  },
+  {
+    key: "processing",
+    label: "Confirming with hotel",
+    icon: "business-outline",
+  },
   { key: "confirmed", label: "Booking confirmed!", icon: "checkmark-circle" },
 ];
 
-const STATUS_ORDER = ["pending", "awaiting_payment", "processing", "confirmed", "failed"];
+const STATUS_ORDER = [
+  "pending",
+  "awaiting_payment",
+  "processing",
+  "confirmed",
+  "failed",
+];
 
 function getStepIndex(status: string | null): number {
   const idx = STATUS_ORDER.indexOf(status ?? "pending");
@@ -33,11 +51,14 @@ function SpinnerDot() {
         duration: 1000,
         easing: Easing.linear,
         useNativeDriver: true,
-      })
+      }),
     ).start();
   }, [rotation]);
 
-  const rotate = rotation.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+  const rotate = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
 
   return (
     <Animated.View style={{ transform: [{ rotate }] }}>
@@ -53,12 +74,16 @@ export default function ProcessingScreen() {
 
   const { data: statusData } = useBookingStatus(
     currentBookingId ?? "",
-    !!currentBookingId && sagaStatus !== "confirmed" && sagaStatus !== "failed"
+    !!currentBookingId && sagaStatus !== "confirmed" && sagaStatus !== "failed",
   );
 
-  // Sync polled status into booking flow store
+  // Sync polled status into booking flow store.
+  // Guard: never overwrite a terminal status (confirmed/failed) that the
+  // WebSocket may have already set — a stale poll response must not regress state.
   useEffect(() => {
-    if (statusData?.status && statusData.status !== sagaStatus) {
+    if (!statusData?.status) return;
+    if (sagaStatus === "confirmed" || sagaStatus === "failed") return;
+    if (statusData.status !== sagaStatus) {
       updateSagaStatus(statusData.status);
     }
   }, [statusData, sagaStatus, updateSagaStatus]);
@@ -102,25 +127,30 @@ export default function ProcessingScreen() {
         {isFailed
           ? "Payment Failed"
           : sagaStatus === "confirmed"
-          ? "All Set!"
-          : "Processing..."}
+            ? "All Set!"
+            : "Processing..."}
       </Text>
       <Text
         className="text-sm text-center mb-10"
-        style={{ fontFamily: "Inter-Regular", color: "#64748B", lineHeight: 22 }}
+        style={{
+          fontFamily: "Inter-Regular",
+          color: "#64748B",
+          lineHeight: 22,
+        }}
       >
         {isFailed
           ? "Your payment could not be processed. No charges were made."
           : sagaStatus === "confirmed"
-          ? "Redirecting you to your booking..."
-          : "Please don't close the app while we confirm your booking."}
+            ? "Redirecting you to your booking..."
+            : "Please don't close the app while we confirm your booking."}
       </Text>
 
       {/* Steps */}
       <View className="w-full gap-0">
         {STEPS.map((step, idx) => {
           const isDone = idx < currentStepIdx || sagaStatus === "confirmed";
-          const isActive = idx === currentStepIdx && sagaStatus !== "confirmed" && !isFailed;
+          const isActive =
+            idx === currentStepIdx && sagaStatus !== "confirmed" && !isFailed;
           const isFuture = idx > currentStepIdx && sagaStatus !== "confirmed";
 
           return (
@@ -133,8 +163,8 @@ export default function ProcessingScreen() {
                     backgroundColor: isDone
                       ? "#10B981"
                       : isActive
-                      ? "#FF5733"
-                      : "#F1F5F9",
+                        ? "#FF5733"
+                        : "#F1F5F9",
                   }}
                 >
                   {isDone ? (
@@ -163,7 +193,11 @@ export default function ProcessingScreen() {
                   className="text-sm"
                   style={{
                     fontFamily: isActive ? "Inter-Medium" : "Inter-Regular",
-                    color: isDone ? "#10B981" : isActive ? "#1E293B" : "#94A3B8",
+                    color: isDone
+                      ? "#10B981"
+                      : isActive
+                        ? "#1E293B"
+                        : "#94A3B8",
                   }}
                 >
                   {step.label}
