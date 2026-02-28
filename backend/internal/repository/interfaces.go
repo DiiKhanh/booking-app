@@ -58,3 +58,22 @@ type InventoryRepository interface {
 	GetInventoryForRoom(ctx context.Context, roomID int, startDate, endDate time.Time) ([]*domain.Inventory, error)
 	BulkSetInventory(ctx context.Context, roomID int, startDate time.Time, days, total int) error
 }
+
+// ReviewRepository defines data access operations for hotel reviews.
+type ReviewRepository interface {
+	// CreateReview inserts a new review and updates hotel rating stats atomically.
+	CreateReview(ctx context.Context, review *domain.Review) (*domain.Review, error)
+	// GetReviewByID fetches a single review by its primary key.
+	GetReviewByID(ctx context.Context, id int) (*domain.Review, error)
+	// GetReviewByBookingID returns the review tied to a specific booking (or ErrNotFound).
+	GetReviewByBookingID(ctx context.Context, bookingID int) (*domain.Review, error)
+	// ListReviewsByHotel returns paginated reviews for a hotel, newest first.
+	ListReviewsByHotel(ctx context.Context, hotelID, page, limit int) ([]*domain.Review, int, error)
+	// UpdateReview replaces editable fields (rating, title, comment) and updates hotel stats.
+	UpdateReview(ctx context.Context, review *domain.Review) (*domain.Review, error)
+	// DeleteReview removes a review and recalculates hotel rating stats.
+	DeleteReview(ctx context.Context, id int) error
+	// HasConfirmedBookingAtHotel returns true when the user has at least one
+	// confirmed booking for a room belonging to the given hotel.
+	HasConfirmedBookingAtHotel(ctx context.Context, userID string, hotelID int) (bool, error)
+}

@@ -19,6 +19,7 @@ func New(
 	hotelHandler *handler.HotelHandler,
 	roomHandler *handler.RoomHandler,
 	ownerHandler *handler.OwnerHandler,
+	reviewHandler *handler.ReviewHandler,
 	tokenMgr *tokenpkg.TokenManager,
 	allowedOrigins []string,
 	healthHandler *handler.HealthHandler,
@@ -72,6 +73,20 @@ func New(
 			publicGroup.GET("/hotels", hotelHandler.ListHotels)
 			publicGroup.GET("/hotels/:id", hotelHandler.GetHotel)
 			publicGroup.GET("/hotels/:id/rooms", roomHandler.ListRoomsByHotel)
+			// Reviews listing is public (no auth required).
+			publicGroup.GET("/hotels/:id/reviews", reviewHandler.ListReviewsByHotel)
+		}
+
+		// ----- Review write routes (JWT + guest role + auth rate limit) -----
+		reviewGroup := v1.Group("")
+		reviewGroup.Use(middleware.JWTAuth(tokenMgr))
+		reviewGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
+		{
+			// Create review — any authenticated guest who has a confirmed booking.
+			reviewGroup.POST("/hotels/:id/reviews", reviewHandler.CreateReview)
+			// Update/delete are scoped to the review ID.
+			reviewGroup.PUT("/reviews/:id", reviewHandler.UpdateReview)
+			reviewGroup.DELETE("/reviews/:id", reviewHandler.DeleteReview)
 		}
 
 		// ----- Booking routes (JWT required + auth rate limit) -----

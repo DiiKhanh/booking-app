@@ -82,6 +82,7 @@ func main() {
 	roomRepo := repository.NewRoomRepo(db)
 	inventoryRepo := repository.NewInventoryRepo(db)
 	dashboardRepo := repository.NewDashboardRepo(db)
+	reviewRepo := repository.NewReviewRepo(db)
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo, roomRepo)
@@ -89,6 +90,7 @@ func main() {
 	hotelSvc := service.NewHotelService(hotelRepo)
 	roomSvc := service.NewRoomService(roomRepo, hotelRepo)
 	inventorySvc := service.NewInventoryService(inventoryRepo, roomRepo, hotelRepo)
+	reviewSvc := service.NewReviewService(reviewRepo)
 
 	// 8. Handlers
 	bookingHandler := handler.NewBookingHandler(bookingSvc)
@@ -96,6 +98,7 @@ func main() {
 	hotelHandler := handler.NewHotelHandler(hotelSvc)
 	roomHandler := handler.NewRoomHandler(roomSvc, inventorySvc)
 	ownerHandler := handler.NewOwnerHandler(dashboardRepo)
+	reviewHandler := handler.NewReviewHandler(reviewSvc)
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 
 	// 9. Router
@@ -106,6 +109,7 @@ func main() {
 		hotelHandler,
 		roomHandler,
 		ownerHandler,
+		reviewHandler,
 		tokenMgr,
 		allowedOrigins,
 		healthHandler,

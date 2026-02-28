@@ -3,7 +3,7 @@
   "subject": "Phase 6: Reviews System",
   "description": "Reviews CRUD with validation (completed booking required). 4 endpoints.",
   "activeForm": "Implementing Phase 6 reviews",
-  "status": "pending",
+  "status": "completed",
   "blocks": [
     "10"
   ],
