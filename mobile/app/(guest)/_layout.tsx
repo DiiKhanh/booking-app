@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 
 import { useNotifications } from "@/hooks/useNotifications";
+import { useRealtimeConnection } from "@/hooks/useRealtimeConnection";
 
 const TAB_ICON_SIZE = 22;
 
@@ -31,6 +32,8 @@ function TabBarIcon({
 
 export default function GuestLayout() {
   const { unreadCount } = useNotifications();
+  // Establish WebSocket connection for real-time booking status + notifications.
+  useRealtimeConnection();
 
   return (
     <Tabs
@@ -40,9 +43,8 @@ export default function GuestLayout() {
         tabBarInactiveTintColor: "#94A3B8",
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: Platform.OS === "ios"
-            ? "rgba(255, 255, 255, 0.85)"
-            : "#FFFFFF",
+          backgroundColor:
+            Platform.OS === "ios" ? "rgba(255, 255, 255, 0.85)" : "#FFFFFF",
           borderTopWidth: 0,
           elevation: 0,
           height: Platform.OS === "ios" ? 88 : 68,

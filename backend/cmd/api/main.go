@@ -114,7 +114,10 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	adminSvc := service.NewAdminService(userRepo, bookingRepo, outboxRepo)
 
-	// 7b. RabbitMQ (optional — warn and continue if unavailable)
+	// 7b. WebSocket Hub (created before RabbitMQ so it can receive broadcasts)
+	hub := handler.NewHub()
+
+	// 7c. RabbitMQ (optional — warn and continue if unavailable)
 	var sagaOrch service.SagaOrchestratorInterface
 	rabbitConn, rabbitErr := rabbitinfra.NewConnection(cfg.RabbitMQURL, logger)
 	if rabbitErr != nil {
@@ -143,6 +146,17 @@ func main() {
 		}()
 
 		sagaOrch = service.NewSagaOrchestrator(bookingRepo, paymentRepo, outboxRepo, inventorySvc)
+
+		// Notification broadcast consumer: receives payment result events and
+		// pushes real-time booking status updates to connected WebSocket clients.
+		notifConsumer := rabbitinfra.NewConsumer(rabbitConn, "booking.notifications", "api-notif-broadcaster", logger)
+		go func() {
+			broadcastCtx, broadcastCancel := context.WithCancel(context.Background())
+			defer broadcastCancel()
+			if err := notifConsumer.Consume(broadcastCtx, handler.NewPaymentBroadcastHandler(hub, paymentRepo, bookingRepo, logger)); err != nil && broadcastCtx.Err() == nil {
+				logger.Error("notification broadcast consumer stopped", zap.Error(err))
+			}
+		}()
 	}
 
 	// 8. Handlers
@@ -156,7 +170,6 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, sagaOrch)
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
-	hub := handler.NewHub()
 	wsHandler := handler.NewWSHandler(hub, tokenMgr)
 	adminHandler := handler.NewAdminHandler(adminSvc)
 

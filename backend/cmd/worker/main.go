@@ -49,11 +49,24 @@ func main() {
 	}
 
 	// Repositories.
+	bookingRepo := repository.NewBookingRepo(db, nil) // locker not needed in worker
 	payRepo := repository.NewPaymentRepo(db)
 	outboxRepo := repository.NewOutboxRepo(db)
+	inventoryRepo := repository.NewInventoryRepo(db)
+	roomRepo := repository.NewRoomRepo(db)
+	hotelRepo := repository.NewHotelRepo(db)
+	notifRepo := repository.NewNotificationRepo(db)
 
-	// Payment service (use time-based seed for production).
+	// Services.
 	paymentSvc := service.NewPaymentService(payRepo, outboxRepo, time.Now().UnixNano())
+	inventorySvc := service.NewInventoryService(inventoryRepo, roomRepo, hotelRepo)
+	notifSvc := service.NewNotificationService(notifRepo)
+
+	// SagaOrchestrator with notification side-effects.
+	sagaOrch := service.NewSagaOrchestrator(
+		bookingRepo, payRepo, outboxRepo, inventorySvc,
+		service.WithNotificationSender(&notifAdapter{svc: notifSvc}),
+	)
 
 	// RabbitMQ connection.
 	conn, err := rabbitmq.NewConnection(cfg.RabbitMQURL, logger)
@@ -88,12 +101,12 @@ func main() {
 		}
 	}()
 
-	// Consumer for payment processing.
+	// Consumer for all payment events (payment.# via booking.payments queue).
 	consumer := rabbitmq.NewConsumer(conn, "booking.payments", "payment-worker", logger)
 
 	go func() {
 		err := consumer.Consume(ctx, func(ctx context.Context, delivery amqp.Delivery) bool {
-			return handleDelivery(ctx, delivery, paymentSvc, outboxRepo, logger)
+			return handleDelivery(ctx, delivery, paymentSvc, outboxRepo, sagaOrch, logger)
 		})
 		if err != nil && ctx.Err() == nil {
 			logger.Error("consumer exited with error", zap.Error(err))
@@ -113,7 +126,7 @@ func main() {
 
 // handleDelivery routes incoming RabbitMQ messages to the appropriate handler.
 // Returns true to ack, false to nack.
-func handleDelivery(ctx context.Context, delivery amqp.Delivery, paymentSvc *service.PaymentService, outboxRepo repository.OutboxRepository, logger *zap.Logger) bool {
+func handleDelivery(ctx context.Context, delivery amqp.Delivery, paymentSvc *service.PaymentService, outboxRepo repository.OutboxRepository, sagaOrch sagaResultHandler, logger *zap.Logger) bool {
 	// Check idempotency.
 	alreadyProcessed, err := outboxRepo.IsEventProcessed(ctx, delivery.MessageId)
 	if err != nil {
@@ -128,6 +141,12 @@ func handleDelivery(ctx context.Context, delivery amqp.Delivery, paymentSvc *ser
 	switch delivery.RoutingKey {
 	case "payment.initiated":
 		return handlePaymentInitiated(ctx, delivery, paymentSvc, logger)
+	case "payment.succeeded":
+		return handlePaymentSucceeded(ctx, delivery, sagaOrch, logger)
+	case "payment.failed":
+		return handlePaymentFailed(ctx, delivery, sagaOrch, logger)
+	case "payment.timed_out":
+		return handlePaymentTimedOut(ctx, delivery, sagaOrch, logger)
 	default:
 		logger.Warn("unknown routing key", zap.String("routing_key", delivery.RoutingKey))
 		return false
@@ -156,4 +175,14 @@ func handlePaymentInitiated(ctx context.Context, delivery amqp.Delivery, payment
 
 	logger.Info("payment processed successfully", zap.String("payment_id", payload.PaymentID))
 	return true
+}
+
+// notifAdapter adapts NotificationService to the NotificationSender interface.
+type notifAdapter struct {
+	svc *service.NotificationService
+}
+
+func (a *notifAdapter) Notify(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error {
+	_, err := a.svc.CreateNotification(ctx, userID, notifType, title, message, data)
+	return err
 }

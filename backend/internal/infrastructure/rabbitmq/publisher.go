@@ -96,5 +96,16 @@ func SetupTopology(ch *amqp.Channel) error {
 		return fmt.Errorf("bind payments queue: %w", err)
 	}
 
+	// Notification fan-out queue: API server subscribes to broadcast via WebSocket.
+	// Binds only to result events (succeeded/failed/timed_out) — not payment.initiated.
+	if _, err := ch.QueueDeclare("booking.notifications", true, false, false, false, args); err != nil {
+		return fmt.Errorf("declare notifications queue: %w", err)
+	}
+	for _, key := range []string{"payment.succeeded", "payment.failed", "payment.timed_out"} {
+		if err := ch.QueueBind("booking.notifications", key, "booking.events", false, nil); err != nil {
+			return fmt.Errorf("bind notifications queue (key=%s): %w", key, err)
+		}
+	}
+
 	return nil
 }

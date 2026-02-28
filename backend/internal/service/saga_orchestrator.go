@@ -32,12 +32,28 @@ type InventoryRestorer interface {
 	RestoreInventory(ctx context.Context, roomID int, startDate, endDate time.Time) error
 }
 
+// NotificationSender is an optional side-effect: send a user notification after
+// a saga state transition. Errors are logged and treated as non-fatal so they
+// never abort the saga.
+type NotificationSender interface {
+	Notify(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error
+}
+
+// SagaOption configures a SagaOrchestrator.
+type SagaOption func(*SagaOrchestrator)
+
+// WithNotificationSender wires an optional notification sender.
+func WithNotificationSender(n NotificationSender) SagaOption {
+	return func(s *SagaOrchestrator) { s.notifier = n }
+}
+
 // SagaOrchestrator implements the payment saga FSM.
 type SagaOrchestrator struct {
 	bookingRepo       SagaBookingRepository
 	payRepo           repository.PaymentRepository
 	outboxRepo        repository.OutboxRepository
 	inventoryRestorer InventoryRestorer
+	notifier          NotificationSender // optional
 }
 
 // NewSagaOrchestrator creates a new SagaOrchestrator.
@@ -46,13 +62,18 @@ func NewSagaOrchestrator(
 	payRepo repository.PaymentRepository,
 	outboxRepo repository.OutboxRepository,
 	inventoryRestorer InventoryRestorer,
+	opts ...SagaOption,
 ) *SagaOrchestrator {
-	return &SagaOrchestrator{
+	s := &SagaOrchestrator{
 		bookingRepo:       bookingRepo,
 		payRepo:           payRepo,
 		outboxRepo:        outboxRepo,
 		inventoryRestorer: inventoryRestorer,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // StartCheckout initiates the payment saga:
@@ -114,9 +135,20 @@ func (s *SagaOrchestrator) HandlePaymentSuccess(ctx context.Context, paymentID s
 		return fmt.Errorf("update payment status: %w", err)
 	}
 
+	booking, err := s.bookingRepo.FindBookingByID(ctx, payment.BookingID)
+	if err != nil {
+		return fmt.Errorf("find booking for confirmation: %w", err)
+	}
+
 	if err := s.bookingRepo.UpdateBookingStatus(ctx, payment.BookingID, domain.BookingStatusConfirmed); err != nil {
 		return fmt.Errorf("update booking confirmed: %w", err)
 	}
+
+	s.notify(ctx, booking.UserID, domain.NotificationTypeBookingConfirmed,
+		"Booking Confirmed",
+		fmt.Sprintf("Your booking #%d has been confirmed. Enjoy your stay!", payment.BookingID),
+		map[string]any{"booking_id": payment.BookingID, "payment_id": paymentID},
+	)
 	return nil
 }
 
@@ -143,6 +175,12 @@ func (s *SagaOrchestrator) HandlePaymentFailure(ctx context.Context, paymentID s
 	if err := s.inventoryRestorer.RestoreInventory(ctx, booking.RoomID, booking.StartDate, booking.EndDate); err != nil {
 		return fmt.Errorf("restore inventory: %w", err)
 	}
+
+	s.notify(ctx, booking.UserID, domain.NotificationTypePaymentFailed,
+		"Payment Failed",
+		fmt.Sprintf("Payment for booking #%d failed: %s. Please try again.", payment.BookingID, reason),
+		map[string]any{"booking_id": payment.BookingID, "payment_id": paymentID, "reason": reason},
+	)
 	return nil
 }
 
@@ -169,7 +207,21 @@ func (s *SagaOrchestrator) HandlePaymentTimeout(ctx context.Context, paymentID s
 	if err := s.inventoryRestorer.RestoreInventory(ctx, booking.RoomID, booking.StartDate, booking.EndDate); err != nil {
 		return fmt.Errorf("restore inventory: %w", err)
 	}
+
+	s.notify(ctx, booking.UserID, domain.NotificationTypePaymentTimedOut,
+		"Payment Timed Out",
+		fmt.Sprintf("Payment for booking #%d timed out. Your booking has been cancelled.", payment.BookingID),
+		map[string]any{"booking_id": payment.BookingID, "payment_id": paymentID},
+	)
 	return nil
+}
+
+// notify sends a notification if a notifier is configured. Errors are non-fatal.
+func (s *SagaOrchestrator) notify(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) {
+	if s.notifier == nil {
+		return
+	}
+	_ = s.notifier.Notify(ctx, userID, notifType, title, message, data) // best-effort
 }
 
 func (s *SagaOrchestrator) emitInitiatedEvent(ctx context.Context, payment *domain.Payment, booking *domain.Booking) error {

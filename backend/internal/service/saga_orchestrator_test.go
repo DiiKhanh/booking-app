@@ -484,6 +484,190 @@ func TestSagaOrchestrator_HandlePaymentTimeout_RestoreInventoryError(t *testing.
 	}
 }
 
+// --- Mock NotificationSender ---
+
+type mockNotificationSender struct {
+	notifyFn func(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error
+}
+
+func (m *mockNotificationSender) Notify(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error {
+	return m.notifyFn(ctx, userID, notifType, title, message, data)
+}
+
+func makeMockNotificationSender(overrides mockNotificationSender) *mockNotificationSender {
+	defaults := &mockNotificationSender{
+		notifyFn: func(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error {
+			return nil
+		},
+	}
+	if overrides.notifyFn != nil {
+		defaults.notifyFn = overrides.notifyFn
+	}
+	return defaults
+}
+
+// --- Tests: SagaOrchestrator NotificationSender integration ---
+
+func TestSagaOrchestrator_HandlePaymentSuccess_NotificationSent(t *testing.T) {
+	var capturedUserID string
+	var capturedType domain.NotificationType
+
+	payRepo := makePaymentRepo(mockPaymentRepo{
+		getPaymentByIDFn: func(ctx context.Context, id string) (*domain.Payment, error) {
+			return &domain.Payment{ID: id, BookingID: 5, Status: domain.PaymentStatusProcessing}, nil
+		},
+	})
+	bookingRepo := makeSagaBookingRepo(mockSagaBookingRepo{
+		findBookingByIDFn: func(ctx context.Context, id int) (*domain.Booking, error) {
+			return &domain.Booking{ID: id, UserID: "user-42", RoomID: 10,
+				StartDate: time.Now(), EndDate: time.Now().Add(48 * time.Hour)}, nil
+		},
+	})
+	notifier := makeMockNotificationSender(mockNotificationSender{
+		notifyFn: func(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error {
+			capturedUserID = userID
+			capturedType = notifType
+			return nil
+		},
+	})
+
+	orch := service.NewSagaOrchestrator(
+		bookingRepo, payRepo, makeOutboxRepo(mockOutboxRepo{}), makeMockInventoryRestorer(mockInventoryRestorer{}),
+		service.WithNotificationSender(notifier),
+	)
+
+	if err := orch.HandlePaymentSuccess(context.Background(), "pay-id"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedUserID != "user-42" {
+		t.Errorf("expected notification for user-42, got %q", capturedUserID)
+	}
+	if capturedType != domain.NotificationTypeBookingConfirmed {
+		t.Errorf("expected type %q, got %q", domain.NotificationTypeBookingConfirmed, capturedType)
+	}
+}
+
+func TestSagaOrchestrator_HandlePaymentFailure_NotificationSent(t *testing.T) {
+	var capturedType domain.NotificationType
+
+	payRepo := makePaymentRepo(mockPaymentRepo{
+		getPaymentByIDFn: func(ctx context.Context, id string) (*domain.Payment, error) {
+			return &domain.Payment{ID: id, BookingID: 5, Status: domain.PaymentStatusProcessing}, nil
+		},
+	})
+	bookingRepo := makeSagaBookingRepo(mockSagaBookingRepo{
+		findBookingByIDFn: func(ctx context.Context, id int) (*domain.Booking, error) {
+			return &domain.Booking{ID: id, UserID: "user-42", RoomID: 10,
+				StartDate: time.Now(), EndDate: time.Now().Add(48 * time.Hour)}, nil
+		},
+	})
+	notifier := makeMockNotificationSender(mockNotificationSender{
+		notifyFn: func(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error {
+			capturedType = notifType
+			return nil
+		},
+	})
+
+	orch := service.NewSagaOrchestrator(
+		bookingRepo, payRepo, makeOutboxRepo(mockOutboxRepo{}), makeMockInventoryRestorer(mockInventoryRestorer{}),
+		service.WithNotificationSender(notifier),
+	)
+
+	if err := orch.HandlePaymentFailure(context.Background(), "pay-id", "card declined"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedType != domain.NotificationTypePaymentFailed {
+		t.Errorf("expected type %q, got %q", domain.NotificationTypePaymentFailed, capturedType)
+	}
+}
+
+func TestSagaOrchestrator_HandlePaymentTimeout_NotificationSent(t *testing.T) {
+	var capturedType domain.NotificationType
+
+	payRepo := makePaymentRepo(mockPaymentRepo{
+		getPaymentByIDFn: func(ctx context.Context, id string) (*domain.Payment, error) {
+			return &domain.Payment{ID: id, BookingID: 5, Status: domain.PaymentStatusProcessing}, nil
+		},
+	})
+	bookingRepo := makeSagaBookingRepo(mockSagaBookingRepo{
+		findBookingByIDFn: func(ctx context.Context, id int) (*domain.Booking, error) {
+			return &domain.Booking{ID: id, UserID: "user-42", RoomID: 10,
+				StartDate: time.Now(), EndDate: time.Now().Add(48 * time.Hour)}, nil
+		},
+	})
+	notifier := makeMockNotificationSender(mockNotificationSender{
+		notifyFn: func(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error {
+			capturedType = notifType
+			return nil
+		},
+	})
+
+	orch := service.NewSagaOrchestrator(
+		bookingRepo, payRepo, makeOutboxRepo(mockOutboxRepo{}), makeMockInventoryRestorer(mockInventoryRestorer{}),
+		service.WithNotificationSender(notifier),
+	)
+
+	if err := orch.HandlePaymentTimeout(context.Background(), "pay-id"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedType != domain.NotificationTypePaymentTimedOut {
+		t.Errorf("expected type %q, got %q", domain.NotificationTypePaymentTimedOut, capturedType)
+	}
+}
+
+func TestSagaOrchestrator_HandlePaymentSuccess_NotificationFailure_NonFatal(t *testing.T) {
+	// Notification errors must not abort the saga transition.
+	payRepo := makePaymentRepo(mockPaymentRepo{
+		getPaymentByIDFn: func(ctx context.Context, id string) (*domain.Payment, error) {
+			return &domain.Payment{ID: id, BookingID: 5, Status: domain.PaymentStatusProcessing}, nil
+		},
+	})
+	bookingRepo := makeSagaBookingRepo(mockSagaBookingRepo{
+		findBookingByIDFn: func(ctx context.Context, id int) (*domain.Booking, error) {
+			return &domain.Booking{ID: id, UserID: "user-42", RoomID: 10,
+				StartDate: time.Now(), EndDate: time.Now().Add(48 * time.Hour)}, nil
+		},
+	})
+	notifier := makeMockNotificationSender(mockNotificationSender{
+		notifyFn: func(ctx context.Context, userID string, notifType domain.NotificationType, title, message string, data map[string]any) error {
+			return domain.ErrInternal // notification fails
+		},
+	})
+
+	orch := service.NewSagaOrchestrator(
+		bookingRepo, payRepo, makeOutboxRepo(mockOutboxRepo{}), makeMockInventoryRestorer(mockInventoryRestorer{}),
+		service.WithNotificationSender(notifier),
+	)
+
+	// Must succeed even though notification failed.
+	if err := orch.HandlePaymentSuccess(context.Background(), "pay-id"); err != nil {
+		t.Errorf("saga must succeed even when notification fails; got: %v", err)
+	}
+}
+
+func TestSagaOrchestrator_WithoutNotifier_HandlePaymentSuccess_StillWorks(t *testing.T) {
+	// No notifier set — existing behaviour preserved.
+	payRepo := makePaymentRepo(mockPaymentRepo{
+		getPaymentByIDFn: func(ctx context.Context, id string) (*domain.Payment, error) {
+			return &domain.Payment{ID: id, BookingID: 5, Status: domain.PaymentStatusProcessing}, nil
+		},
+	})
+	bookingRepo := makeSagaBookingRepo(mockSagaBookingRepo{
+		findBookingByIDFn: func(ctx context.Context, id int) (*domain.Booking, error) {
+			return &domain.Booking{ID: id, UserID: "user-42", RoomID: 10,
+				StartDate: time.Now(), EndDate: time.Now().Add(48 * time.Hour)}, nil
+		},
+	})
+
+	orch := service.NewSagaOrchestrator(
+		bookingRepo, payRepo, makeOutboxRepo(mockOutboxRepo{}), makeMockInventoryRestorer(mockInventoryRestorer{}),
+	)
+
+	if err := orch.HandlePaymentSuccess(context.Background(), "pay-id"); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
 func TestSagaOrchestrator_StartCheckout_CreatePaymentError(t *testing.T) {
 	bookingRepo := makeSagaBookingRepo(mockSagaBookingRepo{})
 	payRepo := makePaymentRepo(mockPaymentRepo{
