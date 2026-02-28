@@ -1,7 +1,11 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import { useChatStore } from "@/stores/chat.store";
+
 export default function OwnerLayout() {
+  const chatUnread = useChatStore((s) => s.totalUnreadCount);
+
   return (
     <Tabs
       screenOptions={{
@@ -44,6 +48,16 @@ export default function OwnerLayout() {
           title: "Reservations",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="mail-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="(messages)"
+        options={{
+          title: "Messages",
+          tabBarBadge: chatUnread > 0 ? chatUnread : undefined,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbubbles-outline" size={size} color={color} />
           ),
         }}
       />

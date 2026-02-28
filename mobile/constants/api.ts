@@ -49,6 +49,13 @@ export const API = {
     EVENT_DLQ: "/admin/events/dlq",
   },
 
+  CHAT: {
+    CONVERSATIONS: "/conversations",
+    MESSAGES: (id: number) => `/conversations/${id}/messages`,
+    READ: (id: number) => `/conversations/${id}/read`,
+    UNREAD_COUNT: "/chat/unread-count",
+  },
+
   WS: {
     BOOKINGS: "/ws/bookings",
     NOTIFICATIONS: "/ws/notifications",

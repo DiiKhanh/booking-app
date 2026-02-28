@@ -11,6 +11,7 @@ import Animated, {
 
 import { useNotifications } from "@/hooks/useNotifications";
 import { useRealtimeConnection } from "@/hooks/useRealtimeConnection";
+import { useChatStore } from "@/stores/chat.store";
 
 const ACTIVE_COLOR = "#1A3A6B";
 const INACTIVE_COLOR = "#94A3B8";
@@ -52,8 +53,7 @@ function MomoTabIcon({ name, focused, badge }: MomoTabIconProps) {
     transform: [{ scale: iconScale.value }],
   }));
 
-  const outlineName =
-    `${name}-outline` as keyof typeof Ionicons.glyphMap;
+  const outlineName = `${name}-outline` as keyof typeof Ionicons.glyphMap;
 
   return (
     <View style={styles.iconWrapper}>
@@ -72,9 +72,7 @@ function MomoTabIcon({ name, focused, badge }: MomoTabIconProps) {
       {/* Notification badge */}
       {badge !== undefined && badge > 0 ? (
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>
-            {badge > 99 ? "99+" : badge}
-          </Text>
+          <Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Text>
         </View>
       ) : null}
     </View>
@@ -83,6 +81,7 @@ function MomoTabIcon({ name, focused, badge }: MomoTabIconProps) {
 
 export default function GuestLayout() {
   const { unreadCount } = useNotifications();
+  const chatUnread = useChatStore((s) => s.totalUnreadCount);
   useRealtimeConnection();
 
   return (
@@ -93,8 +92,7 @@ export default function GuestLayout() {
         tabBarInactiveTintColor: INACTIVE_COLOR,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor:
-            Platform.OS === "ios" ? "transparent" : "#FFFFFF",
+          backgroundColor: Platform.OS === "ios" ? "transparent" : "#FFFFFF",
           borderTopWidth: 0,
           elevation: 0,
           height: Platform.OS === "ios" ? 88 : 68,
@@ -165,6 +163,19 @@ export default function GuestLayout() {
               name="notifications"
               focused={focused}
               badge={unreadCount}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="(messages)"
+        options={{
+          title: "Messages",
+          tabBarIcon: ({ focused }) => (
+            <MomoTabIcon
+              name="chatbubbles"
+              focused={focused}
+              badge={chatUnread}
             />
           ),
         }}

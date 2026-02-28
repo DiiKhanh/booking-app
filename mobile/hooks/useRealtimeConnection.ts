@@ -17,7 +17,9 @@ import { API } from "@/constants/api";
 import { useAuthStore } from "@/stores/auth.store";
 import { useBookingStore } from "@/stores/booking.store";
 import { useNotificationStore } from "@/stores/notification.store";
+import { useChatStore } from "@/stores/chat.store";
 import type { BookingStatus } from "@/types";
+import type { Message } from "@/types/chat.types";
 
 // The key used to store the access token in SecureStore.
 const ACCESS_TOKEN_KEY = "auth_access_token";
@@ -47,11 +49,27 @@ interface NotificationPayload {
   readonly created_at: string;
 }
 
+interface ChatMessagePayload {
+  readonly id: number;
+  readonly conversation_id: number;
+  readonly sender_id: string;
+  readonly content: string;
+  readonly created_at: string;
+}
+
+interface ChatTypingPayload {
+  readonly conversation_id: number;
+  readonly user_id: string;
+}
+
 export function useRealtimeConnection() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const setSagaStatus = useBookingStore((s) => s.setSagaStatus);
   const currentBookingId = useBookingStore((s) => s.currentBookingId);
   const addNotification = useNotificationStore((s) => s.addNotification);
+  const prependMessage = useChatStore((s) => s.prependMessage);
+  const updateLastMessage = useChatStore((s) => s.updateLastMessage);
+  const setTyping = useChatStore((s) => s.setTyping);
 
   const wsRef = useRef<WebSocket | null>(null);
   const backoffRef = useRef(INITIAL_BACKOFF_MS);
@@ -72,10 +90,7 @@ export function useRealtimeConnection() {
           const p = msg.payload as BookingStatusPayload | undefined;
           if (!p) break;
           // Only update store if this message is for the current booking.
-          if (
-            currentBookingId &&
-            String(p.booking_id) === currentBookingId
-          ) {
+          if (currentBookingId && String(p.booking_id) === currentBookingId) {
             setSagaStatus(p.status);
           }
           break;
@@ -96,12 +111,44 @@ export function useRealtimeConnection() {
           break;
         }
 
+        case "chat.message": {
+          const p = msg.payload as ChatMessagePayload | undefined;
+          if (!p) break;
+          const newMsg: Message = {
+            id: p.id,
+            conversationId: p.conversation_id,
+            senderId: p.sender_id,
+            content: p.content,
+            isRead: false,
+            createdAt: p.created_at,
+          };
+          prependMessage(p.conversation_id, newMsg);
+          updateLastMessage(p.conversation_id, newMsg);
+          break;
+        }
+
+        case "chat.typing": {
+          const p = msg.payload as ChatTypingPayload | undefined;
+          if (!p) break;
+          setTyping(p.conversation_id, true);
+          // Auto-clear typing indicator after 3 seconds.
+          setTimeout(() => setTyping(p.conversation_id, false), 3000);
+          break;
+        }
+
         // "connected" is a welcome message — no action needed.
         default:
           break;
       }
     },
-    [currentBookingId, setSagaStatus, addNotification],
+    [
+      currentBookingId,
+      setSagaStatus,
+      addNotification,
+      prependMessage,
+      updateLastMessage,
+      setTyping,
+    ],
   );
 
   const connect = useCallback(async () => {
