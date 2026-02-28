@@ -78,7 +78,7 @@ Run these **4 processes** simultaneously:
 ```
 [Docker]   → PostgreSQL, Redis, Elasticsearch, RabbitMQ, Prometheus, Grafana, Jaeger
 [api]      → go run cmd/api/main.go          (port 8080)
-[worker]   → go run cmd/worker/main.go       (no port — consumes RabbitMQ)
+[worker]   → go run ./cmd/worker/       (no port — consumes RabbitMQ)
 [web]      → npm run dev -- -p 3001          (port 3001)
 [mobile]   → npm run ios / android           (simulator)
 ```
@@ -246,7 +246,7 @@ Open a **second terminal**:
 
 ```bash
 cd booking-app/backend
-go run cmd/worker/main.go
+go run ./cmd/worker/
 ```
 
 Expected startup:
@@ -505,7 +505,7 @@ RabbitMQ takes ~30 seconds to fully boot. The API server logs a warning and star
 
 ```bash
 docker compose logs rabbitmq | tail -5
-go run cmd/worker/main.go
+go run ./cmd/worker/
 ```
 
 ### Bookings stuck at `awaiting_payment`
@@ -514,7 +514,7 @@ The payment worker is not running. Start it:
 
 ```bash
 cd booking-app/backend
-go run cmd/worker/main.go
+go run ./cmd/worker/
 ```
 
 ### Web portal shows blank page or API 404
@@ -557,7 +557,7 @@ make reset-db            # recreate + migrate
 
 # then in separate terminals:
 make server
-go run cmd/worker/main.go
+go run ./cmd/worker/
 ```
 
 ---
@@ -567,7 +567,521 @@ go run cmd/worker/main.go
 ```
 Tab 1 │ cd backend && docker compose up
 Tab 2 │ cd backend && make server
-Tab 3 │ cd backend && go run cmd/worker/main.go
+Tab 3 │ cd backend && go run ./cmd/worker/
 Tab 4 │ cd web    && npm run dev -- -p 3001
 Tab 5 │ cd mobile && npm run ios
 ```
+
+---
+
+## 11. Shutting Down
+
+Stop processes in reverse order: mobile → web → workers → API → Docker.
+
+### Mobile (Tab 5)
+
+Press `Ctrl+C` in the Metro terminal to stop the bundler.
+
+To also close the iOS simulator:
+```bash
+xcrun simctl shutdown all
+```
+
+### Web portal (Tab 4)
+
+Press `Ctrl+C` in the Next.js terminal.
+
+### Payment worker (Tab 3)
+
+Press `Ctrl+C`. The worker handles `SIGINT` gracefully — it finishes the current message before exiting:
+```
+INFO  worker shutting down...
+INFO  worker stopped
+```
+
+### API server (Tab 2)
+
+Press `Ctrl+C`. Graceful shutdown drains in-flight requests (5 s timeout):
+```
+INFO  shutting down server...
+INFO  server stopped
+```
+
+### Docker infrastructure (Tab 1)
+
+```bash
+cd booking-app/backend
+
+# Stop containers, keep all data (volumes preserved)
+docker compose down
+
+# Stop containers AND delete all data (full wipe)
+docker compose down -v
+```
+
+> Use `down -v` only when you want a clean slate. All database records, Redis keys, RabbitMQ messages, and Elasticsearch indices will be permanently deleted.
+
+### One-liner full shutdown
+
+```bash
+# Stop API + worker (find PIDs by port/process name)
+pkill -f "cmd/api/main.go"
+pkill -f "cmd/worker"
+
+# Stop web (Next.js)
+pkill -f "next dev"
+
+# Stop Docker
+cd booking-app/backend && docker compose down
+```
+
+---
+
+## 12. Using the Observability & Dev Tools
+
+All tools are available once Docker is running (`docker compose up -d`).
+
+---
+
+### Adminer — PostgreSQL Web UI
+
+**URL**: http://localhost:8081
+
+A lightweight database browser for PostgreSQL.
+
+**Login credentials:**
+| Field | Value |
+|-------|-------|
+| System | PostgreSQL |
+| Server | `postgres` |
+| Username | `user` |
+| Password | `password` |
+| Database | `booking_db` |
+
+**What you can do:**
+- Browse all 11 tables (hotels, rooms, bookings, users, payments, notifications, …)
+- Run arbitrary SQL queries
+- Inspect rows after making bookings to see saga state changes
+- Check `outbox_events` and `processed_events` tables for saga event flow
+- View `payments` table to see payment status transitions
+
+**Useful queries:**
+```sql
+-- See all bookings with status
+SELECT id, user_id, room_id, status, total_price, created_at FROM bookings ORDER BY created_at DESC;
+
+-- Check saga payment flow
+SELECT p.id, p.booking_id, p.status, p.amount, p.created_at
+FROM payments p JOIN bookings b ON b.id = p.booking_id ORDER BY p.created_at DESC;
+
+-- View pending outbox events (not yet published to RabbitMQ)
+SELECT id, event_type, payload, created_at FROM outbox_events WHERE published_at IS NULL;
+
+-- View recent notifications
+SELECT user_id, type, title, message, read, created_at FROM notifications ORDER BY created_at DESC LIMIT 20;
+```
+
+---
+
+### Redis Commander — Redis Web UI
+
+**URL**: http://localhost:8082
+
+**What you can do:**
+- Browse all Redis keys in a tree view
+- Inspect distributed lock keys: `lock:room:{roomID}:{date}` (5 s TTL)
+- View rate-limit counters: `rate:{ip}` keys
+- View cached hotel/search results
+- Monitor key TTLs and memory usage
+
+**Key patterns to watch:**
+| Key pattern | Purpose |
+|-------------|---------|
+| `lock:room:*` | Distributed inventory locks (auto-expire in 5 s) |
+| `rate:*` | Rate limiter counters per IP |
+| `hotel:*` | Cached hotel data |
+| `search:*` | Cached search results |
+
+---
+
+### RabbitMQ Management UI
+
+**URL**: http://localhost:15672
+**Credentials**: `guest` / `guest`
+
+**What you can do:**
+- Monitor queue depths (messages waiting to be consumed)
+- Watch message rates (publish/s, deliver/s, ack/s)
+- Inspect exchanges and routing keys
+- View the Dead Letter Queue (DLQ) for failed messages
+- Manually publish test messages to queues
+- Purge queues
+
+**Key queues to monitor:**
+| Queue | Routing keys | Consumer |
+|-------|-------------|---------|
+| `booking.payments` | `payment.initiated`, `payment.succeeded`, `payment.failed`, `payment.timed_out` | Payment worker |
+| `booking.notifications` | `payment.succeeded`, `payment.failed`, `payment.timed_out` | API server (WS broadcast) |
+| `booking.dlq` | any failed messages | Manual retry |
+
+**How to watch the saga flow:**
+1. Open the **Queues** tab
+2. Click `booking.payments`
+3. Start a booking checkout via the API or mobile app
+4. Watch the message move through: Ready → Unacked → Acked
+
+---
+
+### Prometheus — Metrics
+
+**URL**: http://localhost:9090
+
+**What you can do:**
+- Query metrics using PromQL
+- Check which metrics the API server exposes
+- Set up alert rules (advanced)
+
+**Useful PromQL queries:**
+```promql
+# Total HTTP requests by endpoint and status code
+http_requests_total
+
+# Request latency histogram (p95)
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+# Active goroutines
+go_goroutines
+
+# Booking creation rate (per minute)
+rate(http_requests_total{handler="/api/v1/bookings",method="POST"}[1m]) * 60
+
+# Error rate (5xx responses)
+rate(http_requests_total{status=~"5.."}[5m])
+```
+
+**Check all available metrics:**
+```bash
+curl -s http://localhost:8080/metrics | grep "^# HELP"
+```
+
+---
+
+### Grafana — Dashboards
+
+**URL**: http://localhost:3000
+**Credentials**: `admin` / `admin`
+
+Pre-configured dashboards are provisioned from `backend/monitoring/grafana/`.
+
+**Available dashboards:**
+| Dashboard | What it shows |
+|-----------|--------------|
+| **StayEase Overview** | Request rate, error rate, latency p50/p95/p99 |
+| **Booking Saga** | Payment success/failure/timeout rates, saga throughput |
+| **Go Runtime** | Goroutines, GC pauses, heap usage, memory allocations |
+
+**How to open a dashboard:**
+1. Click the grid icon (Dashboards) in the left sidebar
+2. Select **Browse** → choose a dashboard
+
+**How to change the time range:**
+- Top-right corner: select `Last 15 minutes`, `Last 1 hour`, etc.
+- Click the refresh icon or set auto-refresh interval
+
+**Connect Prometheus datasource** (first time only if not auto-provisioned):
+1. Go to **Connections** → **Data Sources**
+2. Add Prometheus → URL: `http://prometheus:9090`
+3. Click **Save & Test**
+
+---
+
+### Jaeger — Distributed Tracing
+
+**URL**: http://localhost:16686
+
+**What you can do:**
+- Search traces by service, operation, duration, or tags
+- See the full request lifecycle across all layers (handler → service → repository → DB/Redis)
+- Identify slow spans and bottlenecks
+- Inspect trace context propagation
+
+**How to find a booking trace:**
+1. Open Jaeger UI
+2. Set **Service** to `booking-app`
+3. Set **Operation** to `POST /api/v1/bookings` (or any route)
+4. Click **Find Traces**
+5. Click any trace to see the waterfall view of spans
+
+**What to look for:**
+| Span | Normal latency |
+|------|---------------|
+| HTTP handler | < 5 ms overhead |
+| DB query (simple) | < 10 ms |
+| DB query (booking with lock) | < 100 ms |
+| Redis lock acquire | < 10 ms |
+| Full booking creation | < 200 ms |
+
+**Trace tags available:**
+- `booking.id`, `booking.status`
+- `user.id`, `user.role`
+- `db.statement` (SQL queries)
+- `http.method`, `http.url`, `http.status_code`
+
+---
+
+### Elasticsearch
+
+**URL**: http://localhost:9200
+
+Used for hotel geo-search. Access is plain HTTP JSON.
+
+**Check cluster health:**
+```bash
+curl http://localhost:9200/_cluster/health?pretty
+```
+
+**List all indices:**
+```bash
+curl http://localhost:9200/_cat/indices?v
+```
+
+**Search hotels by city (same query the API uses):**
+```bash
+curl -X GET "http://localhost:9200/hotels/_search?pretty" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": {
+      "match": { "city": "Hanoi" }
+    }
+  }'
+```
+
+**Check if hotels index exists:**
+```bash
+curl http://localhost:9200/hotels/_count?pretty
+```
+
+> Hotels are indexed automatically when created/approved via the API. If the index is empty, create a hotel through the owner portal or API and approve it as admin.
+
+---
+
+## 13. Development Workflow Tips
+
+### Register test accounts
+
+```bash
+# Guest account
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Guest","email":"guest@test.com","password":"password123","role":"guest"}'
+
+# Owner account
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Hotel Owner","email":"owner@test.com","password":"password123","role":"owner"}'
+
+# Admin account
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Platform Admin","email":"admin@test.com","password":"password123","role":"admin"}'
+```
+
+### Useful endpoints to test the full saga
+
+```bash
+# 1. Login and save token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"guest@test.com","password":"password123"}' \
+  | jq -r '.data.tokens.accessToken')
+
+# 2. Create a booking
+curl -X POST http://localhost:8080/api/v1/bookings \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"room_id":1,"start_date":"2026-06-01","end_date":"2026-06-05","guests":2}'
+
+# 3. Start checkout (triggers the payment saga)
+curl -X POST http://localhost:8080/api/v1/checkout \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"booking_id":1}'
+
+# 4. Poll booking status (or watch it update in real time via WebSocket)
+curl http://localhost:8080/api/v1/bookings/1 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Reset everything for a clean test run
+
+```bash
+cd booking-app/backend
+docker compose down -v       # wipe all data
+docker compose up -d         # restart infra
+sleep 30                     # wait for services to be healthy
+make reset-db                # recreate + migrate DB
+```
+
+---
+
+## 14. Docker Tips
+
+All commands below assume you are in `booking-app/backend/` (where `docker-compose.yml` lives).
+
+---
+
+### Container status
+
+```bash
+# List all containers and their health status
+docker compose ps
+
+# One-line status for all containers
+docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+```
+
+---
+
+### Viewing logs
+
+```bash
+# Tail logs for all services
+docker compose logs -f
+
+# Tail logs for a specific service
+docker compose logs -f postgres
+docker compose logs -f rabbitmq
+docker compose logs -f elasticsearch
+
+# Show last N lines without following
+docker compose logs --tail=50 postgres
+```
+
+Available service names: `postgres`, `redis`, `elasticsearch`, `rabbitmq`,
+`adminer`, `redis-commander`, `prometheus`, `grafana`, `jaeger`
+
+---
+
+### Start, stop, restart
+
+```bash
+# Start all (detached)
+docker compose up -d
+
+# Start a single service
+docker compose up -d rabbitmq
+
+# Stop all (keep volumes)
+docker compose down
+
+# Restart a single service without touching others
+docker compose restart rabbitmq
+
+# Recreate a single service (picks up config changes)
+docker compose up -d --force-recreate elasticsearch
+```
+
+---
+
+### Shell access — exec into a container
+
+```bash
+# PostgreSQL — open psql
+docker exec -it booking-postgres psql -U user -d booking_db
+
+# Redis — open redis-cli
+docker exec -it booking-redis redis-cli
+
+# Elasticsearch — run a curl query from inside the container
+docker exec -it booking-elasticsearch curl -s localhost:9200/_cluster/health?pretty
+
+# RabbitMQ — list queues
+docker exec -it booking-rabbitmq rabbitmqctl list_queues name messages consumers
+```
+
+---
+
+### Resource usage
+
+```bash
+# Live CPU / memory / network stats for all containers
+docker stats
+
+# Stats snapshot (no streaming)
+docker stats --no-stream
+
+# Disk usage by images, containers, volumes
+docker system df
+```
+
+---
+
+### Image & volume management
+
+```bash
+# List volumes created by this project
+docker volume ls | grep booking
+
+# Inspect a volume (find mount path)
+docker volume inspect booking-app_postgres_data
+
+# Remove unused images (safe to run periodically)
+docker image prune -f
+
+# Full system prune — removes ALL stopped containers, unused networks, dangling images
+# WARNING: only run this when no other Docker projects are active
+docker system prune -f
+```
+
+---
+
+### Selective data wipe
+
+```bash
+# Wipe only the PostgreSQL volume (keeps Redis, RabbitMQ, ES data)
+docker compose stop postgres
+docker volume rm booking-app_postgres_data
+docker compose up -d postgres
+make createdb && make migrate
+
+# Wipe only RabbitMQ queues (useful when messages are stuck)
+docker compose restart rabbitmq
+
+# Wipe all volumes (full clean slate)
+docker compose down -v
+docker compose up -d
+sleep 30 && make reset-db
+```
+
+---
+
+### Wait for a service to become healthy
+
+```bash
+# Poll until postgres is ready (useful in CI or scripts)
+until docker exec booking-postgres pg_isready -U user -d booking_db; do
+  echo "waiting for postgres..."; sleep 2
+done
+
+# Check RabbitMQ management API readiness
+until curl -sf http://localhost:15672/api/overview -u guest:guest > /dev/null; do
+  echo "waiting for rabbitmq..."; sleep 2
+done
+```
+
+---
+
+### Pull latest images (update dependencies)
+
+```bash
+# Pull updated images for all services defined in docker-compose.yml
+docker compose pull
+
+# Then recreate containers with the new images
+docker compose up -d
+```
+
+Test credentials:
+  - Owner: owner@stayease.app / Password123
+  - Admin: admin@stayease.app / Password123
+  - Guest: guest@test.com / Password123

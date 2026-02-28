@@ -192,7 +192,7 @@ func insertHotelBatch(ctx context.Context, db *sql.DB, rng *rand.Rand, count int
 		var createdAt, updatedAt time.Time
 
 		err := stmt.QueryRowContext(ctx,
-			"seed-owner",                          // owner_id (placeholder)
+			"d76da93f-2e59-435e-8ee9-54894402033d",                          // owner_id (placeholder)
 			name,                                  // name
 			fmt.Sprintf("%s, %s", city, country), // location
 			fmt.Sprintf("%d Seed Street", i+1),   // address
@@ -214,7 +214,7 @@ func insertHotelBatch(ctx context.Context, db *sql.DB, rng *rand.Rand, count int
 
 		hotels = append(hotels, &domain.Hotel{
 			ID:          hotelID,
-			OwnerID:     "seed-owner",
+			OwnerID:     "d76da93f-2e59-435e-8ee9-54894402033d",
 			Name:        name,
 			Location:    fmt.Sprintf("%s, %s", city, country),
 			City:        city,

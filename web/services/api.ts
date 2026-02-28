@@ -32,7 +32,7 @@ apiClient.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // ── Response interceptor: handle 401 refresh ─────────────────────────
@@ -53,9 +53,9 @@ apiClient.interceptors.response.use(
           const refreshToken = state?.tokens?.refreshToken;
           if (refreshToken) {
             const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-              refreshToken,
+              refresh_token: refreshToken,
             });
-            const newToken = data?.data?.accessToken;
+            const newToken = data?.data?.access_token;
             if (newToken && original.headers) {
               original.headers.Authorization = `Bearer ${newToken}`;
             }
@@ -71,5 +71,5 @@ apiClient.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );

@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8080";
+const API_BASE_URL = `${process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8080"}/api/v1`;
 const WS_BASE_URL = process.env.EXPO_PUBLIC_WS_URL ?? "ws://localhost:8080";
 
 export const API = {
@@ -10,6 +10,7 @@ export const API = {
     REGISTER: "/auth/register",
     REFRESH: "/auth/refresh",
     ME: "/auth/me",
+    LOGOUT: "/auth/logout",
   },
 
   HOTELS: {

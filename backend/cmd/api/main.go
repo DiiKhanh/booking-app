@@ -183,7 +183,13 @@ func main() {
 	}
 
 	// 9. Router
-	allowedOrigins := []string{"http://localhost:3000", "http://localhost:8081"}
+	allowedOrigins := []string{
+		"http://localhost:3000", // Grafana
+		"http://localhost:3001", // Web portal
+		"http://localhost:8081", // Adminer
+		"http://localhost:8083", // Expo Metro (mobile dev)
+		"http://192.168.2.5:8083", // Expo on LAN
+	}
 	r := router.New(
 		bookingHandler,
 		authHandler,
