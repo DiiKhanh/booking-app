@@ -72,10 +72,25 @@ services:
     networks:
       - booking-network
 
+  elasticsearch:
+    image: elasticsearch:8.12.0
+    container_name: booking-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - booking-network
+
 volumes:
   postgres_data:
   redis_data:
   grafana_data:
+  es_data:
 
 networks:
   booking-network:

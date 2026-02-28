@@ -20,6 +20,7 @@ func New(
 	roomHandler *handler.RoomHandler,
 	ownerHandler *handler.OwnerHandler,
 	reviewHandler *handler.ReviewHandler,
+	searchHandler *handler.SearchHandler,
 	tokenMgr *tokenpkg.TokenManager,
 	allowedOrigins []string,
 	healthHandler *handler.HealthHandler,
@@ -71,6 +72,7 @@ func New(
 		publicGroup.Use(middleware.RateLimiter(redisClient, rateLimitPublic, time.Minute, "rl:public"))
 		{
 			publicGroup.GET("/hotels", hotelHandler.ListHotels)
+			publicGroup.GET("/hotels/search", searchHandler.Search)
 			publicGroup.GET("/hotels/:id", hotelHandler.GetHotel)
 			publicGroup.GET("/hotels/:id/rooms", roomHandler.ListRoomsByHotel)
 			// Reviews listing is public (no auth required).

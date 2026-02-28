@@ -3,6 +3,7 @@ package main
 import (
 	"booking-app/internal/config"
 	"booking-app/internal/handler"
+	esinfra "booking-app/internal/infrastructure/elasticsearch"
 	tokenpkg "booking-app/internal/infrastructure/jwt"
 	redisinfra "booking-app/internal/infrastructure/redis"
 	"booking-app/internal/observability"
@@ -74,6 +75,17 @@ func main() {
 	refreshTTL := 7 * 24 * time.Hour
 	tokenMgr := tokenpkg.NewTokenManager(cfg.JWTSecret, accessTTL, refreshTTL)
 
+	// 5b. Elasticsearch
+	esClient, err := esinfra.NewClient(cfg.ElasticsearchURL)
+	if err != nil {
+		logger.Fatal("failed to create Elasticsearch client", zap.Error(err))
+	}
+	if ensureErr := esinfra.EnsureIndex(esClient); ensureErr != nil {
+		logger.Warn("could not ensure Elasticsearch index (search may be unavailable)", zap.Error(ensureErr))
+	} else {
+		logger.Info("connected to Elasticsearch")
+	}
+
 	// 6. Repositories
 	bookingRepo := repository.NewBookingRepo(db, locker)
 	userRepo := repository.NewUserRepo(db)
@@ -83,6 +95,7 @@ func main() {
 	inventoryRepo := repository.NewInventoryRepo(db)
 	dashboardRepo := repository.NewDashboardRepo(db)
 	reviewRepo := repository.NewReviewRepo(db)
+	searchRepo := repository.NewESSearchRepo(esClient)
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo, roomRepo)
@@ -91,6 +104,8 @@ func main() {
 	roomSvc := service.NewRoomService(roomRepo, hotelRepo)
 	inventorySvc := service.NewInventoryService(inventoryRepo, roomRepo, hotelRepo)
 	reviewSvc := service.NewReviewService(reviewRepo)
+	searchCache := redisinfra.NewSearchCache(redisClient)
+	searchSvc := service.NewSearchService(searchRepo, searchCache)
 
 	// 8. Handlers
 	bookingHandler := handler.NewBookingHandler(bookingSvc)
@@ -99,6 +114,7 @@ func main() {
 	roomHandler := handler.NewRoomHandler(roomSvc, inventorySvc)
 	ownerHandler := handler.NewOwnerHandler(dashboardRepo)
 	reviewHandler := handler.NewReviewHandler(reviewSvc)
+	searchHandler := handler.NewSearchHandler(searchSvc)
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 
 	// 9. Router
@@ -110,6 +126,7 @@ func main() {
 		roomHandler,
 		ownerHandler,
 		reviewHandler,
+		searchHandler,
 		tokenMgr,
 		allowedOrigins,
 		healthHandler,

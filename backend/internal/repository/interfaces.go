@@ -59,6 +59,18 @@ type InventoryRepository interface {
 	BulkSetInventory(ctx context.Context, roomID int, startDate time.Time, days, total int) error
 }
 
+// SearchRepository defines hotel search operations backed by Elasticsearch.
+type SearchRepository interface {
+	// IndexHotel upserts a single hotel document.
+	IndexHotel(ctx context.Context, hotel *domain.Hotel) error
+	// BulkIndexHotels upserts multiple hotel documents in one batch.
+	BulkIndexHotels(ctx context.Context, hotels []*domain.Hotel) error
+	// SearchHotels executes a geo + filter query and returns paginated results.
+	SearchHotels(ctx context.Context, params domain.SearchParams) ([]*domain.Hotel, int, error)
+	// DeleteHotel removes a hotel document from the index.
+	DeleteHotel(ctx context.Context, id int) error
+}
+
 // ReviewRepository defines data access operations for hotel reviews.
 type ReviewRepository interface {
 	// CreateReview inserts a new review and updates hotel rating stats atomically.
