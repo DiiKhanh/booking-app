@@ -21,6 +21,7 @@ func New(
 	ownerHandler *handler.OwnerHandler,
 	reviewHandler *handler.ReviewHandler,
 	searchHandler *handler.SearchHandler,
+	paymentHandler *handler.PaymentHandler,
 	tokenMgr *tokenpkg.TokenManager,
 	allowedOrigins []string,
 	healthHandler *handler.HealthHandler,
@@ -101,6 +102,15 @@ func New(
 			bookingGroup.GET("/:id", bookingHandler.GetBooking)
 			bookingGroup.GET("/:id/status", bookingHandler.GetBookingStatus)
 			bookingGroup.DELETE("/:id", bookingHandler.CancelBooking)
+		}
+
+		// ----- Payment routes (JWT required + auth rate limit) -----
+		paymentGroup := v1.Group("")
+		paymentGroup.Use(middleware.JWTAuth(tokenMgr))
+		paymentGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
+		{
+			paymentGroup.POST("/checkout", paymentHandler.Checkout)
+			paymentGroup.GET("/payments/:id", paymentHandler.GetPayment)
 		}
 
 		// Admin init route (no auth, matches original behaviour).

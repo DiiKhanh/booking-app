@@ -2,6 +2,17 @@ package domain
 
 import "time"
 
+// BookingStatus constants define all possible booking lifecycle states.
+const (
+	BookingStatusPending         = "pending"
+	BookingStatusAwaitingPayment = "awaiting_payment"
+	BookingStatusProcessing      = "processing"
+	BookingStatusConfirmed       = "confirmed"
+	BookingStatusFailed          = "failed"
+	BookingStatusCancelled       = "cancelled"
+	BookingStatusRefunded        = "refunded"
+)
+
 type Booking struct {
 	ID         int       `json:"id" db:"id"`
 	UserID     string    `json:"user_id" db:"user_id"`

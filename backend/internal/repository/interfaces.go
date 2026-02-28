@@ -6,6 +6,25 @@ import (
 	"time"
 )
 
+// PaymentRepository defines data access operations for payments.
+type PaymentRepository interface {
+	CreatePayment(ctx context.Context, payment *domain.Payment) (*domain.Payment, error)
+	GetPaymentByID(ctx context.Context, id string) (*domain.Payment, error)
+	GetPaymentByBookingID(ctx context.Context, bookingID int) (*domain.Payment, error)
+	UpdatePaymentStatus(ctx context.Context, id string, status domain.PaymentStatus, gatewayRef, failedReason string) error
+	GetPaymentByIdempotencyKey(ctx context.Context, key string) (*domain.Payment, error)
+}
+
+// OutboxRepository defines operations for the transactional outbox pattern.
+type OutboxRepository interface {
+	CreateEvent(ctx context.Context, event *domain.OutboxEvent) error
+	ListUnpublishedEvents(ctx context.Context, limit int) ([]*domain.OutboxEvent, error)
+	MarkPublished(ctx context.Context, id string, publishedAt time.Time) error
+	IncrementRetry(ctx context.Context, id string) error
+	IsEventProcessed(ctx context.Context, eventID string) (bool, error)
+	MarkProcessed(ctx context.Context, eventID string) error
+}
+
 // BookingRepository defines data access operations for bookings.
 type BookingRepository interface {
 	CreateBooking(ctx context.Context, booking *domain.Booking) error

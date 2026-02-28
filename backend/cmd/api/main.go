@@ -5,6 +5,7 @@ import (
 	"booking-app/internal/handler"
 	esinfra "booking-app/internal/infrastructure/elasticsearch"
 	tokenpkg "booking-app/internal/infrastructure/jwt"
+	rabbitinfra "booking-app/internal/infrastructure/rabbitmq"
 	redisinfra "booking-app/internal/infrastructure/redis"
 	"booking-app/internal/observability"
 	"booking-app/internal/repository"
@@ -96,6 +97,8 @@ func main() {
 	dashboardRepo := repository.NewDashboardRepo(db)
 	reviewRepo := repository.NewReviewRepo(db)
 	searchRepo := repository.NewESSearchRepo(esClient)
+	paymentRepo := repository.NewPaymentRepo(db)
+	outboxRepo := repository.NewOutboxRepo(db)
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo, roomRepo)
@@ -106,6 +109,38 @@ func main() {
 	reviewSvc := service.NewReviewService(reviewRepo)
 	searchCache := redisinfra.NewSearchCache(redisClient)
 	searchSvc := service.NewSearchService(searchRepo, searchCache)
+	paymentSvc := service.NewPaymentService(paymentRepo, outboxRepo, time.Now().UnixNano())
+
+	// 7b. RabbitMQ (optional — warn and continue if unavailable)
+	var sagaOrch service.SagaOrchestratorInterface
+	rabbitConn, rabbitErr := rabbitinfra.NewConnection(cfg.RabbitMQURL, logger)
+	if rabbitErr != nil {
+		logger.Warn("RabbitMQ not available, saga orchestration disabled", zap.Error(rabbitErr))
+		sagaOrch = service.NewSagaOrchestrator(bookingRepo, paymentRepo, outboxRepo, inventorySvc)
+	} else {
+		defer rabbitConn.Close()
+		logger.Info("connected to RabbitMQ")
+
+		ch, topErr := rabbitConn.Channel()
+		if topErr == nil {
+			if setupErr := rabbitinfra.SetupTopology(ch); setupErr != nil {
+				logger.Warn("RabbitMQ topology setup failed", zap.Error(setupErr))
+			}
+			ch.Close()
+		}
+
+		publisher := rabbitinfra.NewPublisher(rabbitConn, logger)
+		outboxWorker := service.NewOutboxWorker(outboxRepo, publisher, logger)
+		go func() {
+			workerCtx, workerCancel := context.WithCancel(context.Background())
+			defer workerCancel()
+			if err := outboxWorker.Run(workerCtx); err != nil {
+				logger.Error("outbox worker stopped", zap.Error(err))
+			}
+		}()
+
+		sagaOrch = service.NewSagaOrchestrator(bookingRepo, paymentRepo, outboxRepo, inventorySvc)
+	}
 
 	// 8. Handlers
 	bookingHandler := handler.NewBookingHandler(bookingSvc)
@@ -115,6 +150,7 @@ func main() {
 	ownerHandler := handler.NewOwnerHandler(dashboardRepo)
 	reviewHandler := handler.NewReviewHandler(reviewSvc)
 	searchHandler := handler.NewSearchHandler(searchSvc)
+	paymentHandler := handler.NewPaymentHandler(paymentSvc, sagaOrch)
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 
 	// 9. Router
@@ -127,6 +163,7 @@ func main() {
 		ownerHandler,
 		reviewHandler,
 		searchHandler,
+		paymentHandler,
 		tokenMgr,
 		allowedOrigins,
 		healthHandler,
