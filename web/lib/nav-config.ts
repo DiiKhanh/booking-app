@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Flag,
   ShieldCheck,
+  Megaphone,
 } from "lucide-react";
 
 export type NavItem = {
@@ -99,6 +100,10 @@ export const adminNav: NavItem[] = [
     title: "Support",
     href: "/admin/messages",
     icon: MessageSquare,
+    children: [
+      { title: "Messages", href: "/admin/messages", icon: MessageSquare },
+      { title: "Broadcast", href: "/admin/broadcast", icon: Megaphone },
+    ],
   },
   {
     title: "Settings",
@@ -107,7 +112,11 @@ export const adminNav: NavItem[] = [
     children: [
       { title: "General", href: "/admin/settings", icon: Settings },
       { title: "Feature Flags", href: "/admin/settings/flags", icon: Flag },
-      { title: "Security", href: "/admin/settings/security", icon: ShieldCheck },
+      {
+        title: "Security",
+        href: "/admin/settings/security",
+        icon: ShieldCheck,
+      },
     ],
   },
 ];
