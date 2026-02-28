@@ -46,6 +46,18 @@ func (m *mockUserRepo) FindUserByID(ctx context.Context, id string) (*domain.Use
 	return nil, domain.ErrNotFound
 }
 
+func (m *mockUserRepo) ListUsers(ctx context.Context, page, limit int) ([]*domain.User, int, error) {
+	return []*domain.User{}, 0, nil
+}
+
+func (m *mockUserRepo) UpdateUserRole(ctx context.Context, id string, role domain.Role) error {
+	return nil
+}
+
+func (m *mockUserRepo) DeactivateUser(ctx context.Context, id string) error {
+	return nil
+}
+
 type mockTokenRepo struct {
 	createErr          error
 	findByHashFn       func(ctx context.Context, hash string) (*domain.RefreshToken, error)

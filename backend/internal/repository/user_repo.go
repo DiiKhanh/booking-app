@@ -104,6 +104,78 @@ func (r *pgUserRepo) FindUserByID(ctx context.Context, id string) (*domain.User,
 	return user, nil
 }
 
+// ListUsers returns paginated users ordered by created_at DESC.
+func (r *pgUserRepo) ListUsers(ctx context.Context, page, limit int) ([]*domain.User, int, error) {
+	offset := (page - 1) * limit
+
+	var total int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count users: %w", err)
+	}
+
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, email, password_hash, full_name, phone, avatar_url, role, is_active, created_at, updated_at
+		FROM users
+		ORDER BY created_at DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*domain.User
+	for rows.Next() {
+		u := &domain.User{}
+		if err := rows.Scan(
+			&u.ID, &u.Email, &u.PasswordHash, &u.FullName, &u.Phone,
+			&u.AvatarURL, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan user row: %w", err)
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate user rows: %w", err)
+	}
+	if users == nil {
+		users = []*domain.User{}
+	}
+	return users, total, nil
+}
+
+// UpdateUserRole updates a user's role.
+func (r *pgUserRepo) UpdateUserRole(ctx context.Context, id string, role domain.Role) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`,
+		string(role), id,
+	)
+	if err != nil {
+		return fmt.Errorf("update user role: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("user not found: %w", domain.ErrNotFound)
+	}
+	return nil
+}
+
+// DeactivateUser sets is_active=false for the given user.
+func (r *pgUserRepo) DeactivateUser(ctx context.Context, id string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("deactivate user: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("user not found: %w", domain.ErrNotFound)
+	}
+	return nil
+}
+
 // pgTokenRepo implements TokenRepository using PostgreSQL.
 type pgTokenRepo struct {
 	db *sql.DB

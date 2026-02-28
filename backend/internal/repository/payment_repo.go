@@ -262,3 +262,63 @@ func (r *outboxRepo) MarkProcessed(ctx context.Context, eventID string) error {
 	}
 	return nil
 }
+
+// ListDLQEvents returns outbox events where retry_count >= maxRetries, paginated.
+func (r *outboxRepo) ListDLQEvents(ctx context.Context, maxRetries, page, limit int) ([]*domain.OutboxEvent, int, error) {
+	offset := (page - 1) * limit
+
+	var total int
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM outbox_events WHERE retry_count >= $1`,
+		maxRetries,
+	).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count DLQ events: %w", err)
+	}
+
+	const q = `
+		SELECT id, aggregate_type, aggregate_id, event_type, payload,
+		       published_at, retry_count, created_at
+		FROM outbox_events
+		WHERE retry_count >= $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	rows, err := r.db.QueryContext(ctx, q, maxRetries, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list DLQ events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []*domain.OutboxEvent
+	for rows.Next() {
+		e := &domain.OutboxEvent{}
+		if err := rows.Scan(
+			&e.ID, &e.AggregateType, &e.AggregateID, &e.EventType,
+			&e.Payload, &e.PublishedAt, &e.RetryCount, &e.CreatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan DLQ event: %w", err)
+		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate DLQ events: %w", err)
+	}
+	if events == nil {
+		events = []*domain.OutboxEvent{}
+	}
+	return events, total, nil
+}
+
+// ResetDLQEvent sets retry_count=0 and published_at=NULL for an event so it is retried.
+func (r *outboxRepo) ResetDLQEvent(ctx context.Context, id string) error {
+	const q = `UPDATE outbox_events SET retry_count = 0, published_at = NULL WHERE id = $1`
+	res, err := r.db.ExecContext(ctx, q, id)
+	if err != nil {
+		return fmt.Errorf("reset DLQ event: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("outbox event %q not found: %w", id, domain.ErrNotFound)
+	}
+	return nil
+}

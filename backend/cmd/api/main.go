@@ -99,6 +99,7 @@ func main() {
 	searchRepo := repository.NewESSearchRepo(esClient)
 	paymentRepo := repository.NewPaymentRepo(db)
 	outboxRepo := repository.NewOutboxRepo(db)
+	notifRepo := repository.NewNotificationRepo(db)
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo, roomRepo)
@@ -110,6 +111,8 @@ func main() {
 	searchCache := redisinfra.NewSearchCache(redisClient)
 	searchSvc := service.NewSearchService(searchRepo, searchCache)
 	paymentSvc := service.NewPaymentService(paymentRepo, outboxRepo, time.Now().UnixNano())
+	notifSvc := service.NewNotificationService(notifRepo)
+	adminSvc := service.NewAdminService(userRepo, bookingRepo, outboxRepo)
 
 	// 7b. RabbitMQ (optional — warn and continue if unavailable)
 	var sagaOrch service.SagaOrchestratorInterface
@@ -152,6 +155,19 @@ func main() {
 	searchHandler := handler.NewSearchHandler(searchSvc)
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, sagaOrch)
 	healthHandler := handler.NewHealthHandler(db, redisClient)
+	notifHandler := handler.NewNotificationHandler(notifSvc)
+	hub := handler.NewHub()
+	wsHandler := handler.NewWSHandler(hub, tokenMgr)
+	adminHandler := handler.NewAdminHandler(adminSvc)
+
+	// 8b. Optional distributed tracing (graceful degradation).
+	tracerShutdown, tracerErr := observability.InitTracer(context.Background(), cfg.AppName, cfg.JaegerEndpoint)
+	if tracerErr != nil {
+		logger.Warn("tracing unavailable, continuing without distributed tracing", zap.Error(tracerErr))
+	} else {
+		defer tracerShutdown(context.Background())
+		logger.Info("distributed tracing initialised", zap.String("endpoint", cfg.JaegerEndpoint))
+	}
 
 	// 9. Router
 	allowedOrigins := []string{"http://localhost:3000", "http://localhost:8081"}
@@ -170,6 +186,9 @@ func main() {
 		redisClient,
 		cfg.RateLimitPublic,
 		cfg.RateLimitAuth,
+		notifHandler,
+		wsHandler,
+		adminHandler,
 	)
 
 	// 10. Server with graceful shutdown

@@ -37,9 +37,10 @@ type Config struct {
 	// Phase 8: RabbitMQ
 	RabbitMQURL string
 
-	// Phase 10: OpenTelemetry
+	// Phase 10: OpenTelemetry / Distributed Tracing
 	OTELEndpoint    string
 	OTELServiceName string
+	JaegerEndpoint  string
 }
 
 // IsProduction returns true when running in production mode.
@@ -77,6 +78,7 @@ func Load() *Config {
 
 		OTELEndpoint:    getEnv("OTEL_ENDPOINT", "http://localhost:4318"),
 		OTELServiceName: getEnv("OTEL_SERVICE_NAME", "booking-app"),
+		JaegerEndpoint:  getEnv("JAEGER_ENDPOINT", "http://localhost:4318"),
 	}
 }
 

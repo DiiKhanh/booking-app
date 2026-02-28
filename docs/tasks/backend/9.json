@@ -3,11 +3,41 @@
   "subject": "Phase 9: Notifications & WebSocket",
   "description": "Notifications CRUD, WebSocket for real-time saga status. 5 endpoints.",
   "activeForm": "Implementing Phase 9 notifications",
-  "status": "pending",
+  "status": "completed",
+  "completedAt": "2026-02-28",
   "blocks": [
     "10"
   ],
   "blockedBy": [
     "8"
-  ]
+  ],
+  "summary": {
+    "filesCreated": [
+      "migrations/000006_notifications.up.sql",
+      "migrations/000006_notifications.down.sql",
+      "internal/domain/notification.go",
+      "internal/repository/notification_repo.go",
+      "internal/service/notification_service.go",
+      "internal/service/notification_service_test.go",
+      "internal/handler/notification_handler.go",
+      "internal/handler/notification_handler_test.go",
+      "internal/handler/ws_handler.go",
+      "internal/handler/ws_handler_test.go",
+      "internal/dto/response/notification.go"
+    ],
+    "filesModified": [
+      "internal/repository/interfaces.go",
+      "internal/router/router.go",
+      "cmd/api/main.go"
+    ],
+    "endpoints": [
+      "GET /api/v1/notifications",
+      "GET /api/v1/notifications/unread-count",
+      "PUT /api/v1/notifications/:id/read",
+      "PUT /api/v1/notifications/read-all",
+      "GET /api/v1/ws/bookings"
+    ],
+    "testsAdded": 34,
+    "coverage": "91.8% service, 88.4% handler"
+  }
 }

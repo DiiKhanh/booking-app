@@ -28,6 +28,9 @@ func New(
 	redisClient *redis.Client,
 	rateLimitPublic int,
 	rateLimitAuth int,
+	notificationHandler *handler.NotificationHandler,
+	wsHandler *handler.WSHandler,
+	adminHandler *handler.AdminHandler,
 ) *gin.Engine {
 	r := gin.New()
 
@@ -145,7 +148,37 @@ func New(
 			adminGroup.GET("/hotels/pending", hotelHandler.ListPendingHotels)
 			adminGroup.PUT("/hotels/:id/approve", hotelHandler.ApproveHotel)
 			adminGroup.PUT("/hotels/:id/reject", hotelHandler.RejectHotel)
+
+			// Phase 10: Admin user management
+			adminGroup.GET("/users", adminHandler.ListUsers)
+			adminGroup.GET("/users/:id", adminHandler.GetUser)
+			adminGroup.PUT("/users/:id/role", adminHandler.UpdateUserRole)
+			adminGroup.PUT("/users/:id/deactivate", adminHandler.DeactivateUser)
+
+			// Phase 10: Admin bookings view
+			adminGroup.GET("/bookings", adminHandler.ListAllBookings)
+
+			// Phase 10: System health (admin-scoped)
+			adminGroup.GET("/system/health", adminHandler.SystemHealth)
+
+			// Phase 10: DLQ management
+			adminGroup.GET("/events/dlq", adminHandler.ListDLQEvents)
+			adminGroup.POST("/events/dlq/:id/retry", adminHandler.RetryDLQEvent)
 		}
+
+		// ----- Notification routes (JWT required + auth rate limit) -----
+		notifGroup := v1.Group("/notifications")
+		notifGroup.Use(middleware.JWTAuth(tokenMgr))
+		notifGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
+		{
+			notifGroup.GET("", notificationHandler.ListNotifications)
+			notifGroup.GET("/unread-count", notificationHandler.UnreadCount)
+			notifGroup.PUT("/:id/read", notificationHandler.MarkRead)
+			notifGroup.PUT("/read-all", notificationHandler.MarkAllRead)
+		}
+
+		// ----- WebSocket route (JWT via ?token= query param, no rate limit) -----
+		v1.GET("/ws/bookings", wsHandler.ServeWS)
 	}
 
 	// Legacy routes (no version prefix) — backward compatibility with k6 load tests.

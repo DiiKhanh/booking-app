@@ -23,6 +23,9 @@ type OutboxRepository interface {
 	IncrementRetry(ctx context.Context, id string) error
 	IsEventProcessed(ctx context.Context, eventID string) (bool, error)
 	MarkProcessed(ctx context.Context, eventID string) error
+	// Admin DLQ operations
+	ListDLQEvents(ctx context.Context, maxRetries, page, limit int) ([]*domain.OutboxEvent, int, error)
+	ResetDLQEvent(ctx context.Context, id string) error
 }
 
 // BookingRepository defines data access operations for bookings.
@@ -33,6 +36,8 @@ type BookingRepository interface {
 	ListBookingsByUser(ctx context.Context, userID string, page, limit int) ([]*domain.Booking, int, error)
 	UpdateBookingStatus(ctx context.Context, id int, status string) error
 	CancelBooking(ctx context.Context, id int, userID string) error
+	// Admin operations
+	ListAllBookings(ctx context.Context, page, limit int) ([]*domain.Booking, int, error)
 }
 
 // UserRepository defines data access operations for users.
@@ -40,6 +45,10 @@ type UserRepository interface {
 	CreateUser(ctx context.Context, user *domain.User) error
 	FindUserByEmail(ctx context.Context, email string) (*domain.User, error)
 	FindUserByID(ctx context.Context, id string) (*domain.User, error)
+	// Admin operations
+	ListUsers(ctx context.Context, page, limit int) ([]*domain.User, int, error)
+	UpdateUserRole(ctx context.Context, id string, role domain.Role) error
+	DeactivateUser(ctx context.Context, id string) error
 }
 
 // TokenRepository defines data access operations for refresh tokens.
@@ -88,6 +97,15 @@ type SearchRepository interface {
 	SearchHotels(ctx context.Context, params domain.SearchParams) ([]*domain.Hotel, int, error)
 	// DeleteHotel removes a hotel document from the index.
 	DeleteHotel(ctx context.Context, id int) error
+}
+
+// NotificationRepository defines data access operations for notifications.
+type NotificationRepository interface {
+	Create(ctx context.Context, n *domain.Notification) (*domain.Notification, error)
+	ListByUser(ctx context.Context, userID string, page, limit int) ([]*domain.Notification, int, error)
+	GetUnreadCount(ctx context.Context, userID string) (int, error)
+	MarkRead(ctx context.Context, id int64, userID string) error
+	MarkAllRead(ctx context.Context, userID string) error
 }
 
 // ReviewRepository defines data access operations for hotel reviews.

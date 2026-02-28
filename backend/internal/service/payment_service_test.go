@@ -74,6 +74,14 @@ func (m *mockOutboxRepo) MarkProcessed(ctx context.Context, eventID string) erro
 	return m.markProcessedFn(ctx, eventID)
 }
 
+func (m *mockOutboxRepo) ListDLQEvents(ctx context.Context, maxRetries, page, limit int) ([]*domain.OutboxEvent, int, error) {
+	return []*domain.OutboxEvent{}, 0, nil
+}
+
+func (m *mockOutboxRepo) ResetDLQEvent(ctx context.Context, id string) error {
+	return nil
+}
+
 // --- Helpers ---
 
 func makePaymentRepo(overrides mockPaymentRepo) *mockPaymentRepo {

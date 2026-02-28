@@ -64,6 +64,10 @@ func (m *mockBookingRepo) CancelBooking(ctx context.Context, id int, userID stri
 	return nil
 }
 
+func (m *mockBookingRepo) ListAllBookings(ctx context.Context, page, limit int) ([]*domain.Booking, int, error) {
+	return []*domain.Booking{}, 0, nil
+}
+
 // mockBookingRoomRepo implements repository.RoomRepository for booking service tests.
 type mockBookingRoomRepo struct {
 	getRoomByIDFn func(ctx context.Context, id int) (*domain.Room, error)

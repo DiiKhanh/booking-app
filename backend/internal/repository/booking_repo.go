@@ -228,6 +228,33 @@ func (r *BookingRepo) CancelBooking(ctx context.Context, id int, userID string) 
 	return nil
 }
 
+// ListAllBookings returns all bookings across all users, paginated by created_at DESC.
+func (r *BookingRepo) ListAllBookings(ctx context.Context, page, limit int) ([]*domain.Booking, int, error) {
+	offset := (page - 1) * limit
+
+	var total int
+	if err := r.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM bookings`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count all bookings: %w", err)
+	}
+
+	rows, err := r.DB.QueryContext(ctx, `
+		SELECT id, user_id, room_id, start_date, end_date, total_price, status, created_at
+		FROM bookings
+		ORDER BY created_at DESC
+		LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list all bookings: %w", err)
+	}
+	defer rows.Close()
+
+	bookings, err := scanBookingRows(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return bookings, total, nil
+}
+
 // scanBookingRows scans multiple booking rows into a slice.
 func scanBookingRows(rows *sql.Rows) ([]*domain.Booking, error) {
 	var bookings []*domain.Booking

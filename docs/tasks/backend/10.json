@@ -3,7 +3,8 @@
   "subject": "Phase 10: Admin APIs, Distributed Tracing & Final Polish",
   "description": "Admin user/booking management, OpenTelemetry + Jaeger, Grafana dashboards. 8 endpoints.",
   "activeForm": "Implementing Phase 10 admin/tracing",
-  "status": "pending",
+  "status": "completed",
+  "completedAt": "2026-02-28",
   "blocks": [],
   "blockedBy": [
     "5",
@@ -11,5 +12,45 @@
     "7",
     "8",
     "9"
-  ]
+  ],
+  "summary": {
+    "filesCreated": [
+      "internal/service/admin_service.go",
+      "internal/service/admin_service_test.go",
+      "internal/handler/admin_handler.go",
+      "internal/handler/admin_handler_test.go",
+      "internal/dto/response/admin.go",
+      "internal/observability/tracer.go",
+      "monitoring/grafana/provisioning/dashboards/db-performance.json",
+      "monitoring/grafana/provisioning/dashboards/cache-metrics.json"
+    ],
+    "filesModified": [
+      "internal/repository/interfaces.go",
+      "internal/repository/user_repo.go",
+      "internal/repository/booking_repo.go",
+      "internal/repository/payment_repo.go",
+      "internal/config/config.go",
+      "internal/router/router.go",
+      "cmd/api/main.go",
+      "docker-compose.yml"
+    ],
+    "endpoints": [
+      "GET /api/v1/admin/users",
+      "GET /api/v1/admin/users/:id",
+      "PUT /api/v1/admin/users/:id/role",
+      "PUT /api/v1/admin/users/:id/deactivate",
+      "GET /api/v1/admin/bookings",
+      "GET /api/v1/admin/system/health",
+      "GET /api/v1/admin/events/dlq",
+      "POST /api/v1/admin/events/dlq/:id/retry"
+    ],
+    "infrastructure": [
+      "Jaeger (jaegertracing/all-in-one:1.54) on ports 16686/4318",
+      "OpenTelemetry OTLP/HTTP exporter",
+      "Grafana db-performance dashboard",
+      "Grafana cache-metrics dashboard"
+    ],
+    "testsAdded": 39,
+    "coverage": "92.1% service, 89.2% handler"
+  }
 }
