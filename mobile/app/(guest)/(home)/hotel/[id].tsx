@@ -126,7 +126,17 @@ export default function HotelDetailScreen() {
                       title="Book"
                       size="sm"
                       onPress={() =>
-                        router.push(`/(guest)/(home)/booking/${room.id}`)
+                        router.push({
+                          pathname: `/(guest)/(home)/booking/${room.id}`,
+                          params: {
+                            roomName: room.name,
+                            hotelName: hotel.name,
+                            hotelId: hotel.id,
+                            pricePerNight: String(room.pricePerNight),
+                            currency: room.currency,
+                            capacity: String(room.capacity),
+                          },
+                        })
                       }
                     />
                   </View>
