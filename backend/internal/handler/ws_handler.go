@@ -4,6 +4,8 @@ import (
 	"booking-app/internal/domain"
 	tokenpkg "booking-app/internal/infrastructure/jwt"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 )
 
 // WSMessage is the JSON envelope sent over the WebSocket connection.
@@ -156,6 +159,7 @@ type WSHandler struct {
 	upgrader websocket.Upgrader
 	tokenMgr *tokenpkg.TokenManager
 	chatSvc  ChatHandlerServiceInterface // optional; enables inbound chat message routing
+	redis    *redis.Client               // for WS ticket validation
 }
 
 // WSOption configures a WSHandler.
@@ -166,11 +170,13 @@ func WithChatService(svc ChatHandlerServiceInterface) WSOption {
 	return func(h *WSHandler) { h.chatSvc = svc }
 }
 
-// NewWSHandler creates a WSHandler wired to the given Hub and token manager.
-func NewWSHandler(hub *Hub, tokenMgr *tokenpkg.TokenManager, opts ...WSOption) *WSHandler {
+// NewWSHandler creates a WSHandler wired to the given Hub, token manager, and Redis client.
+// rdb is used for the WS ticket exchange pattern.
+func NewWSHandler(hub *Hub, tokenMgr *tokenpkg.TokenManager, rdb *redis.Client, opts ...WSOption) *WSHandler {
 	h := &WSHandler{
 		hub:      hub,
 		tokenMgr: tokenMgr,
+		redis:    rdb,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				// Origin check is handled by the Gin CORS middleware upstream.
@@ -184,22 +190,57 @@ func NewWSHandler(hub *Hub, tokenMgr *tokenpkg.TokenManager, opts ...WSOption) *
 	return h
 }
 
+// wsTicketTTL is how long a one-time WS ticket remains valid in Redis.
+const wsTicketTTL = 30 * time.Second
+
+// IssueWSTicket handles POST /api/v1/ws/ticket.
+// Requires JWTAuth middleware. Generates a one-time ticket stored in Redis with a
+// short TTL, avoiding JWT exposure in WebSocket URLs.
+func (h *WSHandler) IssueWSTicket(c *gin.Context) {
+	userID := getUserIDFromContext(c)
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	ticket := hex.EncodeToString(b)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	if err := h.redis.Set(ctx, "ws:ticket:"+ticket, userID, wsTicketTTL).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"ticket": ticket}})
+}
+
 // ServeWS handles GET /api/v1/ws/bookings.
-// Auth: ?token=<jwt> query parameter (WebSocket clients cannot set custom headers easily).
+// Auth: ?ticket=<uuid> query parameter. The ticket is a one-time value obtained via
+// POST /api/v1/ws/ticket and stored in Redis with a 30s TTL. This avoids exposing
+// the JWT in server logs and browser history.
 func (h *WSHandler) ServeWS(c *gin.Context) {
-	tokenStr := c.Query("token")
-	if tokenStr == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+	ticketStr := c.Query("ticket")
+	if ticketStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing ticket"})
 		return
 	}
 
-	claims, err := h.tokenMgr.ValidateAccessToken(tokenStr)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// GetDel atomically retrieves and deletes the ticket, preventing replay attacks.
+	userID, err := h.redis.GetDel(ctx, "ws:ticket:"+ticketStr).Result()
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired ticket"})
 		return
 	}
-
-	userID := claims.UserID
 
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {

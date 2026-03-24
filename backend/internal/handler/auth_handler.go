@@ -78,25 +78,43 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// Set HttpOnly cookies for web clients (mobile clients use the response body).
+	setAuthCookies(c, result)
+
 	c.JSON(http.StatusOK, response.OK(buildTokensResponse(result)))
 }
 
 // Refresh handles POST /api/v1/auth/refresh.
+// Accepts refresh token from the HttpOnly cookie (web) or request body (mobile).
 func (h *AuthHandler) Refresh(c *gin.Context) {
-	var req request.RefreshRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, response.Fail(err.Error()))
-		return
+	var refreshToken string
+
+	// Web clients: read from HttpOnly cookie.
+	if cookie, err := c.Cookie("refresh_token"); err == nil && cookie != "" {
+		refreshToken = cookie
+	}
+
+	// Mobile clients: read from request body.
+	if refreshToken == "" {
+		var req request.RefreshRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, response.Fail(err.Error()))
+			return
+		}
+		refreshToken = req.RefreshToken
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	result, err := h.svc.Refresh(ctx, req.RefreshToken)
+	result, err := h.svc.Refresh(ctx, refreshToken)
 	if err != nil {
 		h.handleAuthError(c, err)
 		return
 	}
+
+	// Refresh cookies for web clients.
+	setAuthCookies(c, result)
 
 	c.JSON(http.StatusOK, response.OK(buildTokensResponse(result)))
 }
@@ -113,6 +131,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		h.handleAuthError(c, err)
 		return
 	}
+
+	// Clear auth cookies for web clients.
+	clearAuthCookies(c)
 
 	c.JSON(http.StatusOK, response.OK(gin.H{"message": "logged out successfully"}))
 }
@@ -167,4 +188,27 @@ func buildTokensResponse(r *service.AuthResult) response.AuthTokensResponse {
 		TokenType:    "Bearer",
 		ExpiresIn:    r.ExpiresIn,
 	}
+}
+
+// isSecureRequest returns true when the request arrived over HTTPS.
+// Railway and Vercel terminate TLS at the proxy and set X-Forwarded-Proto.
+func isSecureRequest(c *gin.Context) bool {
+	return c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+}
+
+// setAuthCookies writes access_token and refresh_token as HttpOnly cookies.
+// Mobile clients continue to use the tokens in the response body.
+func setAuthCookies(c *gin.Context, result *service.AuthResult) {
+	secure := isSecureRequest(c)
+	// access_token: short-lived, sent on all API requests
+	c.SetCookie("access_token", result.AccessToken, int(result.ExpiresIn), "/", "", secure, true)
+	// refresh_token: long-lived, scoped to the refresh endpoint only
+	c.SetCookie("refresh_token", result.RefreshToken, 7*24*60*60, "/api/v1/auth/refresh", "", secure, true)
+}
+
+// clearAuthCookies invalidates the auth cookies on logout.
+func clearAuthCookies(c *gin.Context) {
+	secure := isSecureRequest(c)
+	c.SetCookie("access_token", "", -1, "/", "", secure, true)
+	c.SetCookie("refresh_token", "", -1, "/api/v1/auth/refresh", "", secure, true)
 }

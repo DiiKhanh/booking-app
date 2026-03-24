@@ -39,7 +39,25 @@
           "icon": "./assets/icon.png",
           "color": "#1A3A6B"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "useHermes": true
+          },
+          "ios": {
+            "useHermes": true
+          }
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "apiBaseUrl": "$(EXPO_PUBLIC_API_URL)",
+      "wsBaseUrl": "$(EXPO_PUBLIC_WS_URL)",
+      "eas": {
+        "projectId": "replace-with-your-eas-project-id"
+      }
+    }
   }
 }

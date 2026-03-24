@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "@/stores/auth.store";
 import { useChatStore } from "@/stores/chat.store";
+import { apiClient } from "@/services/api";
 import type { Message } from "@/types/chat.types";
 
 const WS_URL =
@@ -30,8 +31,12 @@ interface ChatTypingPayload {
   user_id: string;
 }
 
+interface TicketResponse {
+  data: { ticket: string };
+}
+
 export function useRealtimeConnection() {
-  const token = useAuthStore((s) => s.tokens?.accessToken);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const prependMessage = useChatStore((s) => s.prependMessage);
   const updateLastMessage = useChatStore((s) => s.updateLastMessage);
   const setTyping = useChatStore((s) => s.setTyping);
@@ -40,11 +45,29 @@ export function useRealtimeConnection() {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef(MIN_BACKOFF);
   const mountedRef = useRef(true);
+  // connectRef allows the reconnect callback to call the latest connect version
+  // without triggering the react-hooks/immutability ESLint rule.
+  const connectRef = useRef<(() => Promise<void>) | null>(null);
 
-  const connect = useCallback(() => {
-    if (!token || !mountedRef.current) return;
+  const connect = useCallback(async () => {
+    if (!mountedRef.current || !isAuthenticated) return;
 
-    const ws = new WebSocket(`${WS_URL}?token=${token}`);
+    // Fetch a one-time ticket from the server (avoids JWT in WS URL).
+    let ticket: string;
+    try {
+      const res = await apiClient.post<TicketResponse>("/ws/ticket");
+      ticket = res.data?.data?.ticket;
+      if (!ticket) return;
+    } catch {
+      // Schedule retry on ticket fetch failure.
+      reconnectTimer.current = setTimeout(() => {
+        if (mountedRef.current && isAuthenticated) void connectRef.current?.();
+      }, backoffRef.current);
+      backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF);
+      return;
+    }
+
+    const ws = new WebSocket(`${WS_URL}?ticket=${ticket}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -89,22 +112,26 @@ export function useRealtimeConnection() {
       if (!mountedRef.current) return;
       const delay = backoffRef.current;
       backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF);
-      reconnectTimer.current = setTimeout(connect, delay);
+      reconnectTimer.current = setTimeout(() => {
+        if (mountedRef.current && isAuthenticated) void connectRef.current?.();
+      }, delay);
     };
 
     ws.onerror = () => {
       ws.close();
     };
-  }, [token, prependMessage, updateLastMessage, setTyping]);
+  }, [isAuthenticated, prependMessage, updateLastMessage, setTyping]);
 
   useEffect(() => {
     mountedRef.current = true;
-    connect();
+    // Sync ref so reconnect callbacks always call the latest version.
+    connectRef.current = connect;
+    if (isAuthenticated) void connect();
 
     return () => {
       mountedRef.current = false;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };
-  }, [connect]);
+  }, [isAuthenticated, connect]);
 }

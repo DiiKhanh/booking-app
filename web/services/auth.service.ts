@@ -2,7 +2,7 @@
 
 import { apiClient } from "./api";
 import type { ApiResponse } from "@/types/api.types";
-import type { User, AuthTokens } from "@/types/user.types";
+import type { User } from "@/types/user.types";
 
 // Backend response shapes (Go, snake_case)
 interface BackendTokens {
@@ -36,7 +36,6 @@ export interface RegisterRequest {
 
 interface AuthResult {
   user: User;
-  tokens: AuthTokens;
 }
 
 function mapUser(u: BackendUser): User {
@@ -51,17 +50,14 @@ function mapUser(u: BackendUser): User {
   };
 }
 
-function mapTokens(t: BackendTokens): AuthTokens {
-  return {
-    accessToken: t.access_token,
-    refreshToken: t.refresh_token,
-    expiresAt: Date.now() + t.expires_in * 1000,
-  };
-}
-
-async function fetchMe(accessToken: string): Promise<User> {
+// fetchMe uses the access_token from the login response body for the initial call.
+// Subsequent calls use the HttpOnly cookie sent automatically by the browser.
+async function fetchMe(accessToken?: string): Promise<User> {
+  const headers = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : undefined;
   const res = await apiClient.get<ApiResponse<BackendUser>>("/auth/me", {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers,
   });
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Failed to fetch user profile");
@@ -69,13 +65,14 @@ async function fetchMe(accessToken: string): Promise<User> {
   return mapUser(res.data.data);
 }
 
-function setCookies(role: string) {
+// setRoleCookie writes a JavaScript-readable role cookie used by Next.js middleware
+// for server-side role-based routing. The JWT itself stays in an HttpOnly cookie.
+function setRoleCookie(role: string) {
   if (typeof document === "undefined") return;
-  // 7 days — matches refresh token lifetime
   document.cookie = `stayease-role=${role}; path=/; max-age=604800; SameSite=Lax`;
 }
 
-function clearCookies() {
+function clearRoleCookie() {
   if (typeof document === "undefined") return;
   document.cookie = "stayease-role=; path=/; max-age=0";
 }
@@ -88,10 +85,11 @@ async function login(data: LoginRequest): Promise<AuthResult> {
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Invalid credentials");
   }
-  const t = res.data.data;
-  const user = await fetchMe(t.access_token);
-  setCookies(user.role);
-  return { user, tokens: mapTokens(t) };
+  // Backend sets HttpOnly access_token + refresh_token cookies.
+  // Use the access_token from the body for the immediate /auth/me call.
+  const user = await fetchMe(res.data.data.access_token);
+  setRoleCookie(user.role);
+  return { user };
 }
 
 async function register(data: RegisterRequest): Promise<AuthResult> {
@@ -102,19 +100,18 @@ async function register(data: RegisterRequest): Promise<AuthResult> {
   if (!res.data.success || !res.data.data) {
     throw new Error(res.data.error ?? "Registration failed");
   }
-  const t = res.data.data;
-  const user = await fetchMe(t.access_token);
-  setCookies(user.role);
-  return { user, tokens: mapTokens(t) };
+  const user = await fetchMe(res.data.data.access_token);
+  setRoleCookie(user.role);
+  return { user };
 }
 
 async function logout(): Promise<void> {
   try {
     await apiClient.post("/auth/logout");
   } catch {
-    // best-effort
+    // best-effort — server also clears cookies on 401
   }
-  clearCookies();
+  clearRoleCookie();
 }
 
 async function getMe(): Promise<User | null> {

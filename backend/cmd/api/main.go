@@ -173,7 +173,7 @@ func main() {
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
 	chatHandler := handler.NewChatHandler(chatSvc, hub)
-	wsHandler := handler.NewWSHandler(hub, tokenMgr, handler.WithChatService(chatSvc))
+	wsHandler := handler.NewWSHandler(hub, tokenMgr, redisClient, handler.WithChatService(chatSvc))
 	adminHandler := handler.NewAdminHandler(adminSvc)
 
 	// 8b. Optional distributed tracing (graceful degradation).
@@ -185,14 +185,7 @@ func main() {
 		logger.Info("distributed tracing initialised", zap.String("endpoint", cfg.JaegerEndpoint))
 	}
 
-	// 9. Router
-	allowedOrigins := []string{
-		"http://localhost:3000", // Grafana
-		"http://localhost:3001", // Web portal
-		"http://localhost:8081", // Adminer
-		"http://localhost:8083", // Expo Metro (mobile dev)
-		"http://192.168.2.5:8083", // Expo on LAN
-	}
+	// 9. Router — CORS origins from environment (CORS_ALLOWED_ORIGINS)
 	r := router.New(
 		bookingHandler,
 		authHandler,
@@ -203,7 +196,7 @@ func main() {
 		searchHandler,
 		paymentHandler,
 		tokenMgr,
-		allowedOrigins,
+		cfg.CORSOrigins,
 		healthHandler,
 		redisClient,
 		cfg.RateLimitPublic,

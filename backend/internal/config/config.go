@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Config holds all application configuration loaded from environment variables.
@@ -41,6 +42,9 @@ type Config struct {
 	OTELEndpoint    string
 	OTELServiceName string
 	JaegerEndpoint  string
+
+	// Production: CORS allowed origins (comma-separated)
+	CORSOrigins []string
 }
 
 // IsProduction returns true when running in production mode.
@@ -79,6 +83,9 @@ func Load() *Config {
 		OTELEndpoint:    getEnv("OTEL_ENDPOINT", "http://localhost:4318"),
 		OTELServiceName: getEnv("OTEL_SERVICE_NAME", "booking-app"),
 		JaegerEndpoint:  getEnv("JAEGER_ENDPOINT", "http://localhost:4318"),
+
+		CORSOrigins: parseStringSlice(getEnv("CORS_ALLOWED_ORIGINS",
+			"http://localhost:3000,http://localhost:3001,http://localhost:8081,http://localhost:8083,http://192.168.2.5:8083")),
 	}
 }
 
@@ -105,4 +112,19 @@ func getEnvInt(key string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// parseStringSlice splits a comma-separated env var into a trimmed string slice.
+func parseStringSlice(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

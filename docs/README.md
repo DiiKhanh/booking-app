@@ -1364,3 +1364,248 @@ All three modules are architecturally aligned. The remaining work is mounting th
 | Offline mode + cached content | Mobile | 2 d |
 | Frontend error monitoring (Sentry) | Web + Mobile | 4 h |
 | Prometheus alertmanager rules | Backend | 4 h |
+---
+
+## 15. Production Deployment Guide
+
+> **Status:** Ready to deploy. Security hardening (Phase 1) complete. Dockerfiles, CI/CD workflows, and managed-service configs are in place.
+
+### Architecture Overview
+
+```
+Internet
+  │
+  ├── Cloudflare (DNS + DDoS protection)
+  │     │
+  │     ├── Vercel ──────── Next.js 15 Web Portal  (SSR + Edge)
+  │     │
+  │     └── Railway ─────── Go API Server  (:8080)
+  │                    └─── Go Payment Worker (RabbitMQ consumer)
+  │
+  └── Managed Services
+        ├── Supabase         PostgreSQL 16 (connection pooler)
+        ├── Upstash          Redis 7 (TLS — rediss://)
+        ├── CloudAMQP        RabbitMQ (AMQPS — amqps://)
+        ├── Elastic Cloud    Elasticsearch 8
+        └── Expo EAS         Mobile builds → App Store / Google Play
+```
+
+---
+
+### 15.1 Managed Services Setup
+
+#### Supabase (PostgreSQL)
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Go to **Settings → Database → Connection String → URI** (pooler mode, port 6543)
+3. Copy the `DATABASE_URL` — it includes `?sslmode=require`
+4. Run migrations: set `DATABASE_URL` locally and run `make migrate` from `backend/`
+
+#### Upstash (Redis)
+
+1. Create a Redis database at [upstash.com](https://upstash.com)
+2. Copy the **REST URL** — it starts with `rediss://` (TLS enabled)
+3. Set `REDIS_URL` in Railway. The backend reads `REDIS_URL` if `REDIS_ADDR` is empty.
+
+> **Note:** Update `backend/cmd/api/main.go` Redis client to parse `REDIS_URL` (full URL) in addition to the existing `REDIS_ADDR`/`REDIS_PASSWORD` pair.
+
+#### CloudAMQP (RabbitMQ)
+
+1. Create an instance at [cloudamqp.com](https://cloudamqp.com) (Little Lemur is free)
+2. Copy the **AMQP URL** — use the `amqps://` TLS variant for production
+3. Set `RABBITMQ_URL` in Railway for both the API and Worker services
+
+#### Elastic Cloud (Elasticsearch)
+
+1. Start a deployment at [elastic.co/cloud](https://www.elastic.co/cloud)
+2. From the deployment page, copy the **Cloud URL** and create an **API Key**
+3. Set `ELASTICSEARCH_URL` and `ELASTICSEARCH_API_KEY` in Railway
+
+---
+
+### 15.2 Backend — Railway
+
+Railway runs the API and Worker as two separate services from the same repository.
+
+#### Steps
+
+1. Create a new Railway project and link the GitHub repository
+2. **API service:**
+   - Set **Root Directory** → `backend/`
+   - Set **Build Command** → `docker build -f Dockerfile.api -t api .`
+   - Set **Start Command** → `/api`
+   - Set **Health Check Path** → `/api/v1/health/live`
+3. **Worker service:**
+   - Duplicate the service, change Dockerfile to `Dockerfile.worker`
+   - Enable **Always On** (`RAILWAY_RUN_AS_SERVICE=true`) — the worker must never cold-start
+4. Add all environment variables from `backend/.env.production.example`
+5. Set `CORS_ALLOWED_ORIGINS=https://stayease.vercel.app` (your Vercel domain)
+
+#### Required Railway Secrets
+
+| Variable | Source |
+|----------|--------|
+| `DATABASE_URL` | Supabase pooler URI |
+| `REDIS_URL` | Upstash `rediss://` URL |
+| `RABBITMQ_URL` | CloudAMQP `amqps://` URL |
+| `ELASTICSEARCH_URL` | Elastic Cloud endpoint |
+| `JWT_SECRET` | `openssl rand -hex 32` |
+| `CORS_ALLOWED_ORIGINS` | `https://stayease.vercel.app` |
+
+---
+
+### 15.3 Web Portal — Vercel
+
+1. Import the GitHub repository in the Vercel dashboard
+2. Set **Root Directory** → `web/`
+3. Vercel auto-detects Next.js 15 — zero config needed
+4. Add environment variables:
+
+| Variable | Value |
+|----------|-------|
+| `NEXT_PUBLIC_API_URL` | `https://stayease-api.up.railway.app/api/v1` |
+| `NEXT_PUBLIC_WS_URL` | `wss://stayease-api.up.railway.app/api/v1/ws/bookings` |
+
+5. Deploy — the CI workflow (`.github/workflows/web.yml`) auto-deploys on push to `main`.
+
+> **Cookie note:** The web uses `withCredentials: true` (Axios) so the HttpOnly `access_token` cookie is sent automatically. Vercel must be on the same top-level domain as the API, or CORS `AllowCredentials: true` must be set with the exact Vercel origin in `CORS_ALLOWED_ORIGINS`.
+
+---
+
+### 15.4 Mobile — Expo EAS
+
+#### First-time setup
+
+```bash
+npm install -g eas-cli
+cd mobile
+eas login           # authenticate with your Expo account
+eas build:configure # creates/updates eas.json
+```
+
+#### Build for stores
+
+```bash
+# Both platforms
+eas build --platform all --profile production
+
+# Preview build (internal testing, APK)
+eas build --platform android --profile preview
+```
+
+#### Submit to stores
+
+```bash
+eas submit --platform all --profile production --latest
+```
+
+#### Required credentials
+
+| Platform | Requirement |
+|----------|-------------|
+| iOS | Apple Developer account ($99/yr) + provisioning profile |
+| Android | Google Play Console account ($25 one-time) + service account JSON |
+
+---
+
+### 15.5 Security Checklist (Pre-launch)
+
+Run through every item before going live:
+
+- [ ] **JWT in HttpOnly cookie** — `Set-Cookie: access_token=...; HttpOnly; Secure; SameSite=Lax` confirmed in Network tab
+- [ ] **WS ticket exchange** — `POST /api/v1/ws/ticket` returns `{ data: { ticket } }`; WS URL contains ticket (not JWT)
+- [ ] **CORS_ALLOWED_ORIGINS** set to production domain only (not `*`)
+- [ ] **DATABASE_URL** uses `sslmode=require` (Supabase enforces this)
+- [ ] **REDIS_URL** uses `rediss://` (TLS) — Upstash requires it
+- [ ] **RABBITMQ_URL** uses `amqps://` (TLS) — CloudAMQP provides it
+- [ ] **JWT_SECRET** is a fresh 256-bit random value (not the dev default)
+- [ ] All dev secrets rotated (DB passwords, Redis passwords)
+- [ ] **Rate limiting** active: IP (`rate:ip:<ip>`) + per-user (`rate:user:<id>`)
+- [ ] **Body size limit** 2 MB on all `/api/v1` routes
+- [ ] **HTTPS enforced** — Railway and Vercel handle TLS termination automatically
+- [ ] **Elasticsearch API key** scoped with minimum permissions (read + write hotels index only)
+- [ ] **Sentry** (or equivalent) configured for error monitoring in production
+
+---
+
+### 15.6 CI/CD Overview
+
+Three GitHub Actions workflows in `.github/workflows/`:
+
+| Workflow | Trigger | Jobs |
+|----------|---------|------|
+| `backend.yml` | push to `main` (backend/**) | test → build images → push to GHCR → Railway deploy |
+| `web.yml` | push to `main` (web/**) | lint → build → Vercel deploy |
+| `mobile.yml` | git tag `v*.*.*` | EAS iOS build + EAS Android build → EAS submit |
+
+#### Required GitHub Secrets
+
+| Secret | Used by |
+|--------|---------|
+| `RAILWAY_TOKEN` | `backend.yml` deploy step |
+| `VERCEL_TOKEN` | `web.yml` deploy step |
+| `VERCEL_ORG_ID` | `web.yml` deploy step |
+| `VERCEL_PROJECT_ID` | `web.yml` deploy step |
+| `EXPO_TOKEN` | `mobile.yml` EAS build + submit |
+
+#### Required GitHub Variables (non-secret)
+
+| Variable | Used by |
+|----------|---------|
+| `NEXT_PUBLIC_API_URL` | `web.yml` build step |
+| `NEXT_PUBLIC_WS_URL` | `web.yml` build step |
+
+---
+
+### 15.7 Verification Steps
+
+After deploying, verify each layer:
+
+```bash
+# 1. Backend health
+curl https://stayease-api.up.railway.app/api/v1/health/live
+# → {"success":true,"data":{"status":"ok"}}
+
+# 2. WS ticket exchange
+TOKEN=$(curl -s -X POST https://stayease-api.up.railway.app/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"owner@stayease.app","password":"Password123"}' | jq -r '.data.access_token')
+
+curl -s -X POST https://stayease-api.up.railway.app/api/v1/ws/ticket \
+  -H "Authorization: Bearer $TOKEN"
+# → {"data":{"ticket":"<32-hex-chars>"}}
+
+# 3. WS connection (wscat)
+wscat -c "wss://stayease-api.up.railway.app/api/v1/ws/bookings?ticket=<ticket>"
+# → {"type":"connected","payload":{"user_id":"..."}}
+
+# 4. Login sets HttpOnly cookie (browser Network tab)
+# → Response headers: Set-Cookie: access_token=...; HttpOnly; Secure; SameSite=Lax
+
+# 5. Second connect with same ticket → 401 (replay prevention)
+wscat -c "wss://stayease-api.up.railway.app/api/v1/ws/bookings?ticket=<same-ticket>"
+# → HTTP 401
+
+# 6. Docker image size check (run locally)
+docker build -f backend/Dockerfile.api -t api-test backend/
+docker image inspect api-test --format='{{.Size}}' | awk '{printf "%.1f MB\n", $1/1024/1024}'
+# → < 20 MB
+
+# 7. Next.js standalone build
+cd web && npm run build
+ls .next/standalone/
+# → server.js  node_modules/  ...
+```
+
+---
+
+### 15.8 Rollback Procedure
+
+| Layer | Rollback Method |
+|-------|----------------|
+| Backend API | Railway: redeploy previous deployment from the dashboard |
+| Backend Worker | Railway: same — redeploy previous deployment |
+| Web | Vercel: instant rollback from the Vercel dashboard → Deployments |
+| Mobile | Google Play: halt rollout in the Console; App Store: contact Apple |
+| Database | Supabase: point-in-time recovery (PITR) — available on Pro plan |
+

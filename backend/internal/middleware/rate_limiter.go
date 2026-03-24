@@ -95,3 +95,53 @@ func setRateLimitHeaders(c *gin.Context, limit, remaining, resetSeconds int) {
 	c.Header("X-RateLimit-Remaining", strconv.Itoa(remaining))
 	c.Header("X-RateLimit-Reset", strconv.Itoa(resetSeconds))
 }
+
+// UserRateLimiter returns a Gin middleware that limits requests per authenticated user.
+// It MUST be applied after JWTAuth middleware so that "userID" is set in the context.
+// On Redis outage it fails open (request is allowed, warning is logged).
+func UserRateLimiter(redisClient *redis.Client, limit int, window time.Duration) gin.HandlerFunc {
+	windowSeconds := int(window.Seconds())
+
+	return func(c *gin.Context) {
+		userID, exists := c.Get("userID")
+		if !exists {
+			c.Next()
+			return
+		}
+		uid, _ := userID.(string)
+		if uid == "" {
+			c.Next()
+			return
+		}
+
+		key := "rate:user:" + uid
+
+		count, err := runRateLimitScript(c.Request.Context(), redisClient, key, limit, windowSeconds)
+		if err != nil {
+			observability.Global().Warn("user rate limiter: Redis error, allowing request",
+				zap.String("key", key),
+				zap.Error(err),
+			)
+			c.Next()
+			return
+		}
+
+		remaining := limit - count
+		if remaining < 0 {
+			remaining = 0
+		}
+
+		ttl := fetchTTL(c.Request.Context(), redisClient, key, windowSeconds)
+		setRateLimitHeaders(c, limit, remaining, ttl)
+
+		if count > limit {
+			c.Header("Retry-After", strconv.Itoa(ttl))
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "rate limit exceeded",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}

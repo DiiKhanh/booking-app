@@ -2,7 +2,7 @@
  * useRealtimeConnection
  *
  * Manages the authenticated WebSocket connection to the booking updates endpoint.
- * - Authenticates via ?token=<jwt> query param (headers not supported in WS browsers)
+ * - Uses a one-time WS ticket (POST /ws/ticket) to avoid JWT in the WS URL
  * - Routes incoming messages to the correct Zustand store
  * - Auto-reconnects with exponential backoff on disconnection
  * - Cleans up when the user logs out or the component unmounts
@@ -62,6 +62,25 @@ interface ChatTypingPayload {
   readonly user_id: string;
 }
 
+// fetchWSTicket requests a one-time WS ticket from the API using the stored JWT.
+// Returns the ticket string, or null on failure.
+async function fetchWSTicket(token: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${API.BASE_URL}/ws/ticket`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { data?: { ticket?: string } };
+    return json?.data?.ticket ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function useRealtimeConnection() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const setSagaStatus = useBookingStore((s) => s.setSagaStatus);
@@ -89,7 +108,6 @@ export function useRealtimeConnection() {
         case "booking_status_updated": {
           const p = msg.payload as BookingStatusPayload | undefined;
           if (!p) break;
-          // Only update store if this message is for the current booking.
           if (currentBookingId && String(p.booking_id) === currentBookingId) {
             setSagaStatus(p.status);
           }
@@ -131,12 +149,10 @@ export function useRealtimeConnection() {
           const p = msg.payload as ChatTypingPayload | undefined;
           if (!p) break;
           setTyping(p.conversation_id, true);
-          // Auto-clear typing indicator after 3 seconds.
           setTimeout(() => setTyping(p.conversation_id, false), 3000);
           break;
         }
 
-        // "connected" is a welcome message — no action needed.
         default:
           break;
       }
@@ -154,12 +170,14 @@ export function useRealtimeConnection() {
   const connect = useCallback(async () => {
     if (!mountedRef.current || !isAuthenticated) return;
 
-    // Retrieve stored JWT — cannot use headers in WebSocket.
+    // Retrieve stored JWT to request a one-time WS ticket.
     const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
     if (!token) return;
 
-    const url = `${API.WS_URL}/api/v1${API.WS.BOOKINGS}?token=${encodeURIComponent(token)}`;
+    const ticket = await fetchWSTicket(token);
+    if (!ticket || !mountedRef.current) return;
 
+    const url = `${API.WS_URL}/api/v1${API.WS.BOOKINGS}?ticket=${encodeURIComponent(ticket)}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
@@ -177,11 +195,8 @@ export function useRealtimeConnection() {
 
     ws.onclose = () => {
       if (!mountedRef.current) return;
-      // Schedule reconnect with exponential backoff.
       reconnectTimerRef.current = setTimeout(() => {
-        if (mountedRef.current && isAuthenticated) {
-          void connect();
-        }
+        if (mountedRef.current && isAuthenticated) void connect();
       }, backoffRef.current);
 
       backoffRef.current = Math.min(

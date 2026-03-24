@@ -34,6 +34,7 @@ func New(
 	chatHandler *handler.ChatHandler,
 ) *gin.Engine {
 	r := gin.New()
+	r.MaxMultipartMemory = 8 << 20 // 8 MB for multipart/form-data uploads
 
 	// Global middleware stack (order matters).
 	r.Use(middleware.Recovery())
@@ -55,6 +56,7 @@ func New(
 	})
 
 	v1 := r.Group("/api/v1")
+	v1.Use(middleware.BodyLimiter(2 * 1024 * 1024)) // 2 MB limit on all JSON routes
 	{
 		// ----- Public auth routes -----
 		auth := v1.Group("/auth")
@@ -96,10 +98,11 @@ func New(
 			reviewGroup.DELETE("/reviews/:id", reviewHandler.DeleteReview)
 		}
 
-		// ----- Booking routes (JWT required + auth rate limit) -----
+		// ----- Booking routes (JWT required + IP + per-user rate limit) -----
 		bookingGroup := v1.Group("/bookings")
 		bookingGroup.Use(middleware.JWTAuth(tokenMgr))
 		bookingGroup.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
+		bookingGroup.Use(middleware.UserRateLimiter(redisClient, rateLimitAuth, time.Minute))
 		{
 			bookingGroup.POST("", bookingHandler.CreateBooking)
 			bookingGroup.GET("", bookingHandler.ListMyBookings)
@@ -201,7 +204,14 @@ func New(
 			notifGroup.PUT("/read-all", notificationHandler.MarkAllRead)
 		}
 
-		// ----- WebSocket route (JWT via ?token= query param, no rate limit) -----
+		// ----- WebSocket routes -----
+		// POST /ws/ticket: Issues a one-time ticket (requires JWT auth; avoids JWT in WS URL).
+		wsAuth := v1.Group("/ws")
+		wsAuth.Use(middleware.JWTAuth(tokenMgr))
+		{
+			wsAuth.POST("/ticket", wsHandler.IssueWSTicket)
+		}
+		// GET /ws/bookings: Upgrades to WebSocket using a one-time ticket.
 		v1.GET("/ws/bookings", wsHandler.ServeWS)
 	}
 
