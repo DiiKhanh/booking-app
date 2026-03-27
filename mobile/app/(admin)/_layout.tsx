@@ -1,61 +1,44 @@
 import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+
+import {
+  MomoTabBar,
+  TabConfig,
+} from "@/components/navigation/MomoTabBar";
 
 export default function AdminLayout() {
+  const leftTabs: TabConfig[] = [
+    { routeName: "(overview)", label: "Overview", icon: "grid" },
+    { routeName: "(users)", label: "Users", icon: "people" },
+  ];
+
+  const centerTab: TabConfig = {
+    routeName: "(hotels)",
+    label: "Hotels",
+    icon: "business",
+  };
+
+  const rightTabs: TabConfig[] = [
+    { routeName: "(system)", label: "System", icon: "server" },
+  ];
+
   return (
     <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: "#1A3A6B",
-        tabBarInactiveTintColor: "#94A3B8",
-        tabBarStyle: {
-          backgroundColor: "#FFFFFF",
-          borderTopColor: "#E2E8F0",
-          paddingBottom: 4,
-          height: 56,
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontFamily: "Inter-Medium",
-        },
-      }}
+      screenOptions={{ headerShown: false }}
+      tabBar={(props: BottomTabBarProps) => (
+        <MomoTabBar
+          {...props}
+          leftTabs={leftTabs}
+          centerTab={centerTab}
+          rightTabs={rightTabs}
+          centerColor={["#7C3AED", "#9F67FA"]}
+        />
+      )}
     >
-      <Tabs.Screen
-        name="(overview)"
-        options={{
-          title: "Overview",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(users)"
-        options={{
-          title: "Users",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(hotels)"
-        options={{
-          title: "Hotels",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="business-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(system)"
-        options={{
-          title: "System",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="server-outline" size={size} color={color} />
-          ),
-        }}
-      />
+      <Tabs.Screen name="(overview)" />
+      <Tabs.Screen name="(users)" />
+      <Tabs.Screen name="(hotels)" />
+      <Tabs.Screen name="(system)" />
     </Tabs>
   );
 }
