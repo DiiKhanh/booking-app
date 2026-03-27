@@ -33,6 +33,7 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
+      "react-native-maps",
       [
         "expo-notifications",
         {

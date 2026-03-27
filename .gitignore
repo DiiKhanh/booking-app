@@ -36,6 +36,7 @@ env/
 .env.local
 .env.*.local
 backend/.env
+.claude/.env
 
 # Agent
 .agent/logs/
