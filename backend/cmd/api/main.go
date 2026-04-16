@@ -91,6 +91,7 @@ func main() {
 	bookingRepo := repository.NewBookingRepo(db, locker)
 	userRepo := repository.NewUserRepo(db)
 	tokenRepo := repository.NewTokenRepo(db)
+	passwordResetRepo := repository.NewPasswordResetRepo(db)
 	hotelRepo := repository.NewHotelRepo(db)
 	roomRepo := repository.NewRoomRepo(db)
 	inventoryRepo := repository.NewInventoryRepo(db)
@@ -104,7 +105,7 @@ func main() {
 
 	// 7. Services
 	bookingSvc := service.NewBookingService(bookingRepo, roomRepo)
-	authSvc := service.NewAuthService(userRepo, tokenRepo, tokenMgr)
+	authSvc := service.NewAuthService(userRepo, tokenRepo, passwordResetRepo, tokenMgr)
 	hotelSvc := service.NewHotelService(hotelRepo)
 	roomSvc := service.NewRoomService(roomRepo, hotelRepo)
 	inventorySvc := service.NewInventoryService(inventoryRepo, roomRepo, hotelRepo)

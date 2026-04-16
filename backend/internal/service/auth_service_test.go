@@ -18,7 +18,15 @@ type mockUserRepo struct {
 	createErr      error
 	findByEmailFn  func(ctx context.Context, email string) (*domain.User, error)
 	findByIDFn     func(ctx context.Context, id string) (*domain.User, error)
+	updateUserFn   func(ctx context.Context, userID string, updates domain.UserUpdates) (*domain.User, error)
+	updatePasswordFn func(ctx context.Context, userID, passwordHash string) error
 	createdUser    *domain.User
+}
+
+type mockPasswordResetRepo struct {
+	createFn      func(ctx context.Context, reset *domain.PasswordReset) error
+	findByHashFn  func(ctx context.Context, tokenHash string) (*domain.PasswordReset, error)
+	markUsedFn    func(ctx context.Context, id int64) error
 }
 
 func (m *mockUserRepo) CreateUser(ctx context.Context, user *domain.User) error {
@@ -55,6 +63,42 @@ func (m *mockUserRepo) UpdateUserRole(ctx context.Context, id string, role domai
 }
 
 func (m *mockUserRepo) DeactivateUser(ctx context.Context, id string) error {
+	return nil
+}
+
+func (m *mockUserRepo) UpdateUser(ctx context.Context, userID string, updates domain.UserUpdates) (*domain.User, error) {
+	if m.updateUserFn != nil {
+		return m.updateUserFn(ctx, userID, updates)
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockUserRepo) UpdateUserPassword(ctx context.Context, userID, passwordHash string) error {
+	if m.updatePasswordFn != nil {
+		return m.updatePasswordFn(ctx, userID, passwordHash)
+	}
+	return nil
+}
+
+func (m *mockPasswordResetRepo) Create(ctx context.Context, reset *domain.PasswordReset) error {
+	if m.createFn != nil {
+		return m.createFn(ctx, reset)
+	}
+	reset.ID = 1
+	return nil
+}
+
+func (m *mockPasswordResetRepo) FindByTokenHash(ctx context.Context, tokenHash string) (*domain.PasswordReset, error) {
+	if m.findByHashFn != nil {
+		return m.findByHashFn(ctx, tokenHash)
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockPasswordResetRepo) MarkUsed(ctx context.Context, id int64) error {
+	if m.markUsedFn != nil {
+		return m.markUsedFn(ctx, id)
+	}
 	return nil
 }
 
@@ -95,9 +139,19 @@ func (m *mockTokenRepo) RevokeAllUserTokens(ctx context.Context, userID string, 
 func newTestAuthService() (*service.AuthService, *mockUserRepo, *mockTokenRepo) {
 	userRepo := &mockUserRepo{}
 	tokenRepo := &mockTokenRepo{}
+	resetRepo := &mockPasswordResetRepo{}
 	mgr := tokenpkg.NewTokenManager("test-secret-key-32-bytes-minimum!", 15*time.Minute, 7*24*time.Hour)
-	svc := service.NewAuthService(userRepo, tokenRepo, mgr)
+	svc := service.NewAuthService(userRepo, tokenRepo, resetRepo, mgr)
 	return svc, userRepo, tokenRepo
+}
+
+func newTestAuthServiceFull() (*service.AuthService, *mockUserRepo, *mockTokenRepo, *mockPasswordResetRepo) {
+	userRepo := &mockUserRepo{}
+	tokenRepo := &mockTokenRepo{}
+	resetRepo := &mockPasswordResetRepo{}
+	mgr := tokenpkg.NewTokenManager("test-secret-key-32-bytes-minimum!", 15*time.Minute, 7*24*time.Hour)
+	svc := service.NewAuthService(userRepo, tokenRepo, resetRepo, mgr)
+	return svc, userRepo, tokenRepo, resetRepo
 }
 
 // ---- Register ----
@@ -464,8 +518,9 @@ func TestAuthService_Profile_EmptyUserID(t *testing.T) {
 func TestAuthService_Register_TokenRepoPersistError(t *testing.T) {
 	userRepo := &mockUserRepo{}
 	tokenRepo := &mockTokenRepo{createErr: errors.New("db down")}
+	resetRepo := &mockPasswordResetRepo{}
 	mgr := tokenpkg.NewTokenManager("test-secret-key-32-bytes-minimum!", 15*time.Minute, 7*24*time.Hour)
-	svc := service.NewAuthService(userRepo, tokenRepo, mgr)
+	svc := service.NewAuthService(userRepo, tokenRepo, resetRepo, mgr)
 
 	_, err := svc.Register(context.Background(), service.RegisterInput{
 		Email:    "test@example.com",
@@ -480,8 +535,9 @@ func TestAuthService_Register_TokenRepoPersistError(t *testing.T) {
 func TestAuthService_Refresh_UserNotFoundAfterTokenLookup(t *testing.T) {
 	userRepo := &mockUserRepo{} // findByIDFn is nil → ErrNotFound
 	tokenRepo := &mockTokenRepo{}
+	resetRepo := &mockPasswordResetRepo{}
 	mgr := tokenpkg.NewTokenManager("test-secret-key-32-bytes-minimum!", 15*time.Minute, 7*24*time.Hour)
-	svc := service.NewAuthService(userRepo, tokenRepo, mgr)
+	svc := service.NewAuthService(userRepo, tokenRepo, resetRepo, mgr)
 
 	tokenRepo.findByHashFn = func(_ context.Context, hash string) (*domain.RefreshToken, error) {
 		return &domain.RefreshToken{
@@ -501,11 +557,191 @@ func TestAuthService_Refresh_UserNotFoundAfterTokenLookup(t *testing.T) {
 func TestAuthService_Logout_RepoError(t *testing.T) {
 	userRepo := &mockUserRepo{}
 	tokenRepo := &mockTokenRepo{revokeAllErr: errors.New("db error")}
+	resetRepo := &mockPasswordResetRepo{}
 	mgr := tokenpkg.NewTokenManager("test-secret-key-32-bytes-minimum!", 15*time.Minute, 7*24*time.Hour)
-	svc := service.NewAuthService(userRepo, tokenRepo, mgr)
+	svc := service.NewAuthService(userRepo, tokenRepo, resetRepo, mgr)
 
 	err := svc.Logout(context.Background(), "user-id-1")
 	if err == nil {
 		t.Fatal("expected error when token repo fails")
+	}
+}
+
+// ---- UpdateProfile ----
+
+func TestAuthService_UpdateProfile_Success(t *testing.T) {
+	svc, userRepo, _ := newTestAuthService()
+
+	fullName := "Updated Name"
+	userRepo.updateUserFn = func(_ context.Context, userID string, updates domain.UserUpdates) (*domain.User, error) {
+		return &domain.User{
+			ID:       userID,
+			Email:    "test@example.com",
+			FullName: *updates.FullName,
+			Role:     domain.RoleGuest,
+			IsActive: true,
+		}, nil
+	}
+
+	user, err := svc.UpdateProfile(context.Background(), "user-id-1", service.UpdateProfileInput{
+		FullName: &fullName,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if user.FullName != fullName {
+		t.Errorf("expected full_name %q, got %q", fullName, user.FullName)
+	}
+}
+
+func TestAuthService_UpdateProfile_EmptyUserID(t *testing.T) {
+	svc, _, _ := newTestAuthService()
+
+	fullName := "Name"
+	_, err := svc.UpdateProfile(context.Background(), "", service.UpdateProfileInput{
+		FullName: &fullName,
+	})
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Errorf("expected ErrBadRequest for empty userID, got %v", err)
+	}
+}
+
+func TestAuthService_UpdateProfile_NoFields(t *testing.T) {
+	svc, _, _ := newTestAuthService()
+
+	_, err := svc.UpdateProfile(context.Background(), "user-id-1", service.UpdateProfileInput{})
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Errorf("expected ErrBadRequest when no fields provided, got %v", err)
+	}
+}
+
+// ---- ForgotPassword ----
+
+func TestAuthService_ForgotPassword_Success(t *testing.T) {
+	svc, userRepo, _, resetRepo := newTestAuthServiceFull()
+
+	userRepo.findByEmailFn = func(_ context.Context, email string) (*domain.User, error) {
+		return &domain.User{ID: "user-id-1", Email: email, IsActive: true}, nil
+	}
+	resetRepo.createFn = func(_ context.Context, reset *domain.PasswordReset) error {
+		reset.ID = 1
+		return nil
+	}
+
+	token, err := svc.ForgotPassword(context.Background(), "test@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if token == "" {
+		t.Error("expected non-empty reset token")
+	}
+}
+
+func TestAuthService_ForgotPassword_EmptyEmail(t *testing.T) {
+	svc, _, _ := newTestAuthService()
+
+	_, err := svc.ForgotPassword(context.Background(), "")
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Errorf("expected ErrBadRequest for empty email, got %v", err)
+	}
+}
+
+func TestAuthService_ForgotPassword_UserNotFound_ReturnsEmptyToken(t *testing.T) {
+	svc, _, _ := newTestAuthService()
+	// userRepo.findByEmailFn is nil → ErrNotFound
+
+	// Service returns ("", ErrNotFound) and handler converts to 200 to prevent enumeration
+	_, err := svc.ForgotPassword(context.Background(), "nonexistent@example.com")
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("expected ErrNotFound when user not found, got %v", err)
+	}
+}
+
+// ---- ResetPassword ----
+
+func TestAuthService_ResetPassword_Success(t *testing.T) {
+	svc, userRepo, _, resetRepo := newTestAuthServiceFull()
+
+	resetRepo.findByHashFn = func(_ context.Context, tokenHash string) (*domain.PasswordReset, error) {
+		return &domain.PasswordReset{
+			ID:        1,
+			UserID:    "user-id-1",
+			TokenHash: tokenHash,
+			ExpiresAt: time.Now().Add(1 * time.Hour),
+		}, nil
+	}
+	userRepo.findByIDFn = func(_ context.Context, id string) (*domain.User, error) {
+		return &domain.User{ID: id, IsActive: true}, nil
+	}
+
+	err := svc.ResetPassword(context.Background(), "valid-reset-token", "NewSecurePass123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAuthService_ResetPassword_EmptyToken(t *testing.T) {
+	svc, _, _ := newTestAuthService()
+
+	err := svc.ResetPassword(context.Background(), "", "NewSecurePass123")
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Errorf("expected ErrBadRequest for empty token, got %v", err)
+	}
+}
+
+func TestAuthService_ResetPassword_WeakPassword(t *testing.T) {
+	svc, _, _ := newTestAuthService()
+
+	err := svc.ResetPassword(context.Background(), "some-token", "short")
+	if !errors.Is(err, domain.ErrBadRequest) {
+		t.Errorf("expected ErrBadRequest for weak password, got %v", err)
+	}
+}
+
+func TestAuthService_ResetPassword_InvalidToken(t *testing.T) {
+	svc, _, _ := newTestAuthService()
+	// resetRepo.findByHashFn is nil → ErrNotFound
+
+	err := svc.ResetPassword(context.Background(), "invalid-token", "NewSecurePass123")
+	if !errors.Is(err, domain.ErrUnauthorized) {
+		t.Errorf("expected ErrUnauthorized for invalid token, got %v", err)
+	}
+}
+
+func TestAuthService_ResetPassword_ExpiredToken(t *testing.T) {
+	svc, _, _, resetRepo := newTestAuthServiceFull()
+
+	resetRepo.findByHashFn = func(_ context.Context, tokenHash string) (*domain.PasswordReset, error) {
+		return &domain.PasswordReset{
+			ID:        1,
+			UserID:    "user-id-1",
+			TokenHash: tokenHash,
+			ExpiresAt: time.Now().Add(-1 * time.Hour), // expired
+		}, nil
+	}
+
+	err := svc.ResetPassword(context.Background(), "expired-token", "NewSecurePass123")
+	if !errors.Is(err, domain.ErrUnauthorized) {
+		t.Errorf("expected ErrUnauthorized for expired token, got %v", err)
+	}
+}
+
+func TestAuthService_ResetPassword_UsedToken(t *testing.T) {
+	svc, _, _, resetRepo := newTestAuthServiceFull()
+
+	usedAt := time.Now().Add(-5 * time.Minute)
+	resetRepo.findByHashFn = func(_ context.Context, tokenHash string) (*domain.PasswordReset, error) {
+		return &domain.PasswordReset{
+			ID:        1,
+			UserID:    "user-id-1",
+			TokenHash: tokenHash,
+			ExpiresAt: time.Now().Add(1 * time.Hour),
+			UsedAt:    &usedAt,
+		}, nil
+	}
+
+	err := svc.ResetPassword(context.Background(), "used-token", "NewSecurePass123")
+	if !errors.Is(err, domain.ErrUnauthorized) {
+		t.Errorf("expected ErrUnauthorized for already-used token, got %v", err)
 	}
 }

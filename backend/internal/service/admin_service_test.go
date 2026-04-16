@@ -62,6 +62,14 @@ func (m *mockAdminUserRepo) DeactivateUser(ctx context.Context, id string) error
 	return nil
 }
 
+func (m *mockAdminUserRepo) UpdateUser(ctx context.Context, userID string, updates domain.UserUpdates) (*domain.User, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockAdminUserRepo) UpdateUserPassword(ctx context.Context, userID, passwordHash string) error {
+	return nil
+}
+
 // --- Mock BookingRepository (admin extension) ---
 
 type mockAdminBookingRepo struct {

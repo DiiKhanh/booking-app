@@ -144,6 +144,54 @@ func (r *pgUserRepo) ListUsers(ctx context.Context, page, limit int) ([]*domain.
 	return users, total, nil
 }
 
+// UpdateUser applies partial profile updates for the given user and returns the updated record.
+func (r *pgUserRepo) UpdateUser(ctx context.Context, userID string, updates domain.UserUpdates) (*domain.User, error) {
+	const q = `
+		UPDATE users
+		SET
+			full_name  = COALESCE($1, full_name),
+			phone      = COALESCE($2, phone),
+			avatar_url = COALESCE($3, avatar_url),
+			updated_at = NOW()
+		WHERE id = $4
+		RETURNING id, email, password_hash, full_name, phone, avatar_url, role, is_active, created_at, updated_at`
+
+	user := &domain.User{}
+	err := r.db.QueryRowContext(ctx, q,
+		updates.FullName,
+		updates.Phone,
+		updates.AvatarURL,
+		userID,
+	).Scan(
+		&user.ID, &user.Email, &user.PasswordHash,
+		&user.FullName, &user.Phone, &user.AvatarURL,
+		&user.Role, &user.IsActive, &user.CreatedAt, &user.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("user not found: %w", domain.ErrNotFound)
+		}
+		return nil, fmt.Errorf("update user: %w", err)
+	}
+	return user, nil
+}
+
+// UpdateUserPassword sets a new bcrypt password hash for the given user.
+func (r *pgUserRepo) UpdateUserPassword(ctx context.Context, userID, passwordHash string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+		passwordHash, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("update user password: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("user not found: %w", domain.ErrNotFound)
+	}
+	return nil
+}
+
 // UpdateUserRole updates a user's role.
 func (r *pgUserRepo) UpdateUserRole(ctx context.Context, id string, role domain.Role) error {
 	res, err := r.db.ExecContext(ctx,

@@ -5,13 +5,21 @@ import (
 	tokenpkg "booking-app/internal/infrastructure/jwt"
 	"booking-app/internal/repository"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-const bcryptCost = 12
+const (
+	bcryptCost           = 12
+	passwordResetTTL     = 1 * time.Hour
+	passwordResetMinLen  = 8
+)
 
 // RegisterInput holds the data needed to register a new user.
 type RegisterInput struct {
@@ -35,22 +43,33 @@ type AuthResult struct {
 	User         *domain.User
 }
 
+// UpdateProfileInput holds optional fields to update on a user profile.
+// A nil pointer means "do not change this field".
+type UpdateProfileInput struct {
+	FullName  *string
+	Phone     *string
+	AvatarURL *string
+}
+
 // AuthService handles user authentication business logic.
 type AuthService struct {
-	userRepo  repository.UserRepository
-	tokenRepo repository.TokenRepository
-	tokenMgr  *tokenpkg.TokenManager
+	userRepo      repository.UserRepository
+	tokenRepo     repository.TokenRepository
+	resetRepo     repository.PasswordResetRepository
+	tokenMgr      *tokenpkg.TokenManager
 }
 
 // NewAuthService creates a new AuthService.
 func NewAuthService(
 	userRepo repository.UserRepository,
 	tokenRepo repository.TokenRepository,
+	resetRepo repository.PasswordResetRepository,
 	tokenMgr *tokenpkg.TokenManager,
 ) *AuthService {
 	return &AuthService{
 		userRepo:  userRepo,
 		tokenRepo: tokenRepo,
+		resetRepo: resetRepo,
 		tokenMgr:  tokenMgr,
 	}
 }
@@ -167,6 +186,118 @@ func (s *AuthService) Profile(ctx context.Context, userID string) (*domain.User,
 		return nil, err
 	}
 	return user, nil
+}
+
+// UpdateProfile applies partial updates to the current user's profile.
+// At least one field in input must be non-nil.
+func (s *AuthService) UpdateProfile(ctx context.Context, userID string, input UpdateProfileInput) (*domain.User, error) {
+	if userID == "" {
+		return nil, fmt.Errorf("userID is required: %w", domain.ErrBadRequest)
+	}
+	if input.FullName == nil && input.Phone == nil && input.AvatarURL == nil {
+		return nil, fmt.Errorf("at least one field is required: %w", domain.ErrBadRequest)
+	}
+
+	user, err := s.userRepo.UpdateUser(ctx, userID, domain.UserUpdates{
+		FullName:  input.FullName,
+		Phone:     input.Phone,
+		AvatarURL: input.AvatarURL,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// ForgotPassword creates a one-time reset token for the given email address and returns
+// the plain token. In production this token would be emailed to the user; here it is
+// returned directly so the flow can be tested without an email service.
+// Returns (ErrNotFound, "") when the email is not registered — callers should map this
+// to a generic 200 response to prevent user enumeration.
+func (s *AuthService) ForgotPassword(ctx context.Context, email string) (string, error) {
+	if email == "" {
+		return "", fmt.Errorf("email is required: %w", domain.ErrBadRequest)
+	}
+
+	user, err := s.userRepo.FindUserByEmail(ctx, email)
+	if err != nil {
+		return "", err // ErrNotFound propagated; handler maps to 200
+	}
+
+	// Generate a cryptographically random token.
+	raw, tokenHash, err := generateResetToken()
+	if err != nil {
+		return "", fmt.Errorf("generate reset token: %w", domain.ErrInternal)
+	}
+
+	reset := &domain.PasswordReset{
+		UserID:    user.ID,
+		TokenHash: tokenHash,
+		ExpiresAt: time.Now().Add(passwordResetTTL),
+	}
+	if err := s.resetRepo.Create(ctx, reset); err != nil {
+		return "", fmt.Errorf("store reset token: %w", domain.ErrInternal)
+	}
+
+	return raw, nil
+}
+
+// ResetPassword validates the one-time token and updates the user's password.
+func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword string) error {
+	if rawToken == "" {
+		return fmt.Errorf("token is required: %w", domain.ErrBadRequest)
+	}
+	if len(newPassword) < passwordResetMinLen {
+		return fmt.Errorf("password must be at least %d characters: %w", passwordResetMinLen, domain.ErrBadRequest)
+	}
+
+	tokenHash := hashResetToken(rawToken)
+	pr, err := s.resetRepo.FindByTokenHash(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return fmt.Errorf("invalid or expired token: %w", domain.ErrUnauthorized)
+		}
+		return fmt.Errorf("look up reset token: %w", domain.ErrInternal)
+	}
+
+	if pr.IsUsed() {
+		return fmt.Errorf("token has already been used: %w", domain.ErrUnauthorized)
+	}
+	if pr.IsExpired() {
+		return fmt.Errorf("token has expired: %w", domain.ErrUnauthorized)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", domain.ErrInternal)
+	}
+
+	if err := s.userRepo.UpdateUserPassword(ctx, pr.UserID, string(hash)); err != nil {
+		return fmt.Errorf("update password: %w", domain.ErrInternal)
+	}
+
+	if err := s.resetRepo.MarkUsed(ctx, pr.ID); err != nil {
+		// Non-fatal: password is already updated; log but don't fail the request.
+		_ = err
+	}
+
+	return nil
+}
+
+// generateResetToken returns (plaintext, sha256-hex-hash) for a new 32-byte random token.
+func generateResetToken() (string, string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", err
+	}
+	raw := hex.EncodeToString(b)
+	return raw, hashResetToken(raw), nil
+}
+
+// hashResetToken returns the hex-encoded SHA-256 digest of a plain reset token.
+func hashResetToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
 }
 
 // issueTokens generates an access token + refresh token and persists the refresh token.

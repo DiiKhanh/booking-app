@@ -21,6 +21,9 @@ type AuthServiceInterface interface {
 	Refresh(ctx context.Context, rawToken string) (*service.AuthResult, error)
 	Logout(ctx context.Context, userID string) error
 	Profile(ctx context.Context, userID string) (*domain.User, error)
+	UpdateProfile(ctx context.Context, userID string, input service.UpdateProfileInput) (*domain.User, error)
+	ForgotPassword(ctx context.Context, email string) (string, error)
+	ResetPassword(ctx context.Context, token, newPassword string) error
 }
 
 // AuthHandler handles HTTP requests for authentication endpoints.
@@ -153,6 +156,81 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response.OK(response.NewUserProfileResponse(user)))
+}
+
+// UpdateProfile handles PUT /api/v1/auth/me.
+// Requires JWTAuth middleware to have set "userID" in context.
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	userID := getUserIDFromContext(c)
+
+	var req request.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.Fail(err.Error()))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	user, err := h.svc.UpdateProfile(ctx, userID, service.UpdateProfileInput{
+		FullName:  req.FullName,
+		Phone:     req.Phone,
+		AvatarURL: req.AvatarURL,
+	})
+	if err != nil {
+		h.handleAuthError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response.OK(response.NewUserProfileResponse(user)))
+}
+
+// ForgotPassword handles POST /api/v1/auth/forgot-password.
+// Always returns 200 even when the email is not found to prevent user enumeration.
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req request.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.Fail(err.Error()))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	token, err := h.svc.ForgotPassword(ctx, req.Email)
+	if err != nil {
+		// Always respond 200 to prevent email enumeration.
+		// In production the token would be emailed; here we include it in the
+		// response only when found so clients can test the reset flow without email.
+		c.JSON(http.StatusOK, response.OK(gin.H{
+			"message": "if an account with that email exists, a reset link has been sent",
+		}))
+		return
+	}
+
+	c.JSON(http.StatusOK, response.OK(gin.H{
+		"message": "if an account with that email exists, a reset link has been sent",
+		"token":   token, // dev/testing convenience — remove before production
+	}))
+}
+
+// ResetPassword handles POST /api/v1/auth/reset-password.
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req request.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, response.Fail(err.Error()))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	if err := h.svc.ResetPassword(ctx, req.Token, req.NewPassword); err != nil {
+		h.handleAuthError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response.OK(gin.H{"message": "password reset successfully"}))
 }
 
 // handleAuthError maps domain errors to HTTP status codes.

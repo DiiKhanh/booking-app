@@ -45,10 +45,19 @@ type UserRepository interface {
 	CreateUser(ctx context.Context, user *domain.User) error
 	FindUserByEmail(ctx context.Context, email string) (*domain.User, error)
 	FindUserByID(ctx context.Context, id string) (*domain.User, error)
+	UpdateUser(ctx context.Context, userID string, updates domain.UserUpdates) (*domain.User, error)
+	UpdateUserPassword(ctx context.Context, userID, passwordHash string) error
 	// Admin operations
 	ListUsers(ctx context.Context, page, limit int) ([]*domain.User, int, error)
 	UpdateUserRole(ctx context.Context, id string, role domain.Role) error
 	DeactivateUser(ctx context.Context, id string) error
+}
+
+// PasswordResetRepository defines data access for password reset tokens.
+type PasswordResetRepository interface {
+	Create(ctx context.Context, reset *domain.PasswordReset) error
+	FindByTokenHash(ctx context.Context, tokenHash string) (*domain.PasswordReset, error)
+	MarkUsed(ctx context.Context, id int64) error
 }
 
 // TokenRepository defines data access operations for refresh tokens.

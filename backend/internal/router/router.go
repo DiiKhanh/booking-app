@@ -72,7 +72,12 @@ func New(
 		{
 			authProtected.POST("/logout", authHandler.Logout)
 			authProtected.GET("/me", authHandler.Me)
+			authProtected.PUT("/me", authHandler.UpdateProfile)
 		}
+
+		// Public password-reset routes (no JWT required).
+		auth.POST("/forgot-password", authHandler.ForgotPassword)
+		auth.POST("/reset-password", authHandler.ResetPassword)
 
 		// ----- Public hotel routes (no auth, public rate limit) -----
 		publicGroup := v1.Group("")
