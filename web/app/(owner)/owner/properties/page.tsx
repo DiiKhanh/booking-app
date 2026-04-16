@@ -9,10 +9,13 @@ import {
   List,
   Search,
   SlidersHorizontal,
+  Building2,
+  TrendingUp,
+  BedDouble,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -105,6 +108,13 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "created", label: "Newest" },
 ];
 
+const STATUS_TABS: { value: HotelStatus | "all"; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "approved", label: "Active" },
+  { value: "pending", label: "Pending" },
+  { value: "rejected", label: "Rejected" },
+];
+
 function sortHotels(hotels: Hotel[], sort: SortOption): Hotel[] {
   return [...hotels].sort((a, b) => {
     switch (sort) {
@@ -133,7 +143,6 @@ export default function PropertiesPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["owner-hotels", search],
     queryFn: () => hotelService.getMyHotels({ search }),
-    // Fall back to mock data if backend unavailable
     placeholderData: {
       success: true,
       data: MOCK_HOTELS,
@@ -153,7 +162,7 @@ export default function PropertiesPage() {
       const matchesStatus = statusFilter === "all" || h.status === statusFilter;
       return matchesSearch && matchesStatus;
     }),
-    sortBy,
+    sortBy
   );
 
   const counts = {
@@ -163,17 +172,22 @@ export default function PropertiesPage() {
     rejected: hotels.filter((h) => h.status === "rejected").length,
   };
 
+  const totalRooms = hotels.reduce((s, h) => s + h.totalRooms, 0);
+  const totalRevenue = hotels.reduce((s, h) => s + h.totalRevenue, 0);
+  const avgOccupancy = hotels.length
+    ? Math.round(hotels.reduce((s, h) => s + h.occupancyRate, 0) / hotels.length)
+    : 0;
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* ── Page header ────────────────────────────────────── */}
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Properties</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl font-bold font-heading tracking-tight">My Properties</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
             Manage your hotels and accommodations
           </p>
         </div>
-        <Button asChild>
+        <Button asChild className="shrink-0">
           <Link href="/owner/properties/new">
             <Plus className="w-4 h-4 mr-2" />
             Add Property
@@ -181,43 +195,105 @@ export default function PropertiesPage() {
         </Button>
       </div>
 
-      {/* Status tabs */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {(["all", "approved", "pending", "rejected"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors cursor-pointer ${
-              statusFilter === s
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
-            <span className="ml-1.5 text-xs opacity-70">{counts[s]}</span>
-          </button>
-        ))}
+      {/* ── Portfolio stats strip ──────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          {
+            label: "Properties",
+            value: hotels.length,
+            icon: Building2,
+            color: "text-primary",
+            bg: "bg-primary/8",
+          },
+          {
+            label: "Total Rooms",
+            value: totalRooms,
+            icon: BedDouble,
+            color: "text-blue-600",
+            bg: "bg-blue-50 dark:bg-blue-950/30",
+          },
+          {
+            label: "Avg Occupancy",
+            value: `${avgOccupancy}%`,
+            icon: TrendingUp,
+            color: "text-emerald-600",
+            bg: "bg-emerald-50 dark:bg-emerald-950/30",
+          },
+          {
+            label: "Total Revenue",
+            value: `$${(totalRevenue / 1000).toFixed(0)}k`,
+            icon: Star,
+            color: "text-amber-600",
+            bg: "bg-amber-50 dark:bg-amber-950/30",
+          },
+        ].map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={stat.label}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
+            >
+              <div className={`p-2 rounded-lg shrink-0 ${stat.bg}`}>
+                <Icon className={`w-4 h-4 ${stat.color}`} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+                <p className="text-lg font-bold leading-tight">{stat.value}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* ── Status filter tabs ────────────────────────────── */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {STATUS_TABS.map((tab) => {
+          const count = counts[tab.value as keyof typeof counts];
+          const active = statusFilter === tab.value;
+          return (
+            <button
+              key={tab.value}
+              onClick={() => setStatusFilter(tab.value)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium transition-all duration-150 cursor-pointer ${
+                active
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`text-xs rounded-full px-1.5 py-0.5 min-w-5 text-center ${
+                  active
+                    ? "bg-white/20 text-white"
+                    : "bg-background/60 text-muted-foreground"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Toolbar ──────────────────────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search properties..."
+            placeholder="Search by name or city…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 bg-background"
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
           <Select
             value={sortBy}
             onValueChange={(v) => setSortBy(v as SortOption)}
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-36 cursor-pointer">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -231,9 +307,10 @@ export default function PropertiesPage() {
         </div>
 
         {/* View toggle */}
-        <div className="flex items-center border border-border rounded-lg overflow-hidden">
+        <div className="flex items-center border border-border rounded-lg overflow-hidden bg-background">
           <button
             onClick={() => setView("grid")}
+            title="Grid view"
             className={`p-2 transition-colors cursor-pointer ${
               view === "grid"
                 ? "bg-primary text-primary-foreground"
@@ -244,6 +321,7 @@ export default function PropertiesPage() {
           </button>
           <button
             onClick={() => setView("list")}
+            title="List view"
             className={`p-2 transition-colors cursor-pointer ${
               view === "list"
                 ? "bg-primary text-primary-foreground"
@@ -255,14 +333,20 @@ export default function PropertiesPage() {
         </div>
       </div>
 
-      {/* Results count */}
-      <p className="text-sm text-muted-foreground">
+      {/* ── Results count ────────────────────────────────── */}
+      <p className="text-sm text-muted-foreground -mt-2">
         Showing{" "}
-        <span className="font-medium text-foreground">{filtered.length}</span>{" "}
+        <span className="font-semibold text-foreground">{filtered.length}</span>{" "}
         {filtered.length === 1 ? "property" : "properties"}
+        {search && (
+          <span>
+            {" "}
+            for &ldquo;<span className="text-foreground">{search}</span>&rdquo;
+          </span>
+        )}
       </p>
 
-      {/* Hotel grid/list */}
+      {/* ── Content ──────────────────────────────────────── */}
       {isLoading ? (
         <div
           className={
@@ -277,14 +361,14 @@ export default function PropertiesPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Plus className="w-8 h-8 text-muted-foreground" />
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+            <Building2 className="w-7 h-7 text-muted-foreground" />
           </div>
-          <h3 className="font-semibold mb-1">No properties found</h3>
-          <p className="text-muted-foreground text-sm mb-4">
+          <h3 className="font-semibold text-lg mb-1">No properties found</h3>
+          <p className="text-muted-foreground text-sm mb-6 max-w-xs">
             {search
-              ? `No results for "${search}"`
-              : "Get started by adding your first property"}
+              ? `No results for "${search}". Try a different search.`
+              : "Get started by adding your first property."}
           </p>
           {!search && (
             <Button asChild>
