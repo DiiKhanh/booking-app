@@ -456,5 +456,245 @@ Dự án được coi là **hoàn chỉnh như một hệ thống học tập** 
 
 ---
 
+## 8. Roadmap AI/LLM — Sau Khi Hoàn Thành Core Features
+
+> **Điều kiện tiên quyết:** Tất cả 19 tasks trong Section 6 phải hoàn thành trước khi bắt đầu AI features.
+> AI features là phần nâng cao, xây trên nền tảng data thực tế từ hệ thống đang chạy.
+
+---
+
+### 8.1 Tổng Quan AI Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AI Feature Layer                         │
+│                                                             │
+│  Smart Search  │  RAG Recommend  │  AI Chatbot  │  Pricing │
+│                                                             │
+└───────────────────────┬─────────────────────────────────────┘
+                        │
+              ┌─────────▼──────────┐
+              │   LLM Gateway      │
+              │  Claude API        │
+              │  (Haiku / Sonnet)  │
+              └─────────┬──────────┘
+                        │
+        ┌───────────────┼───────────────┐
+        ▼               ▼               ▼
+   pgvector         Embedding       PostgreSQL
+   (vector DB)      Model           (analytics)
+```
+
+**Triết lý chọn stack:**
+- Dùng **pgvector** thay vì Pinecone/Weaviate — tận dụng PostgreSQL đã có, không thêm infra
+- Dùng **Claude API** (Anthropic) — chọn model theo cost/quality: Haiku cho extraction, Sonnet cho chatbot
+- **Prompt Caching** (Anthropic) — giảm 90% cost cho repeated system prompts
+- **Redis cache** LLM responses — TTL 1h cho search, 24h cho summaries
+
+---
+
+### 8.2 Feature 1: Smart Search với Natural Language
+
+**Use Case:** User gõ _"khách sạn gần biển Đà Nẵng dưới 1 triệu, có hồ bơi, phù hợp gia đình"_ → hệ thống hiểu và chuyển thành structured query cho Elasticsearch.
+
+**Luồng:**
+```
+User input (tiếng Việt tự nhiên)
+    ↓
+LLM (claude-haiku — fast, cheap cho structured extraction)
+  Prompt: few-shot examples → JSON output
+  Output: { city, max_price, amenities: ["pool"], lat, lng, radius_km }
+    ↓
+Elasticsearch geo_distance + filter (endpoint /hotels/search đã có)
+    ↓
+Kết quả trả về như search thường
+```
+
+**Backend:**
+- Endpoint mới: `POST /api/v1/hotels/search/nl` (Natural Language)
+- Service: `NLSearchService` — gọi Claude, parse JSON, forward tới `SearchService`
+- Fallback: Nếu LLM fail → fallback về text search thường
+- Rate limit riêng: 10 NL queries/phút/user
+
+**Complexity:** Medium | **Priority:** High (UX impact lớn nhất)
+
+---
+
+### 8.3 Feature 2: RAG-based Hotel Recommendation
+
+**Use Case:** Sau khi user xem hoặc đặt khách sạn, hệ thống gợi ý khách sạn tương tự dựa trên embedding similarity + booking history.
+
+**Luồng:**
+```
+User xem hotel A (5-star, spa, pool, Đà Nẵng)
+    ↓
+pgvector: SELECT ... ORDER BY embedding <-> embed(hotel_A) LIMIT 10
+    ↓
+Filter: price ±30%, available dates, cùng thành phố
+    ↓
+Rerank: booking history + rating score
+```
+
+**Backend:**
+- Migration: `ALTER TABLE hotels ADD COLUMN embedding vector(1536)`
+- Index: `CREATE INDEX ON hotels USING ivfflat (embedding vector_cosine_ops)`
+- Indexing pipeline: khi hotel approved → generate embedding → lưu
+- Endpoint: `GET /api/v1/hotels/:id/similar`
+
+**Tech:** text-embedding-3-small (OpenAI) hoặc Claude embedding
+
+**Complexity:** Medium | **Priority:** High (không cần infra mới, dùng pgvector)
+
+---
+
+### 8.4 Feature 3: AI Guest Support Chatbot
+
+**Use Case:** Guest chat với AI bot để hỏi về booking, chính sách hủy phòng, thủ tục check-in — 24/7 trước khi cần contact owner thật.
+
+**Luồng:**
+```
+Guest: "Booking #1234 của tôi có bị mất tiền nếu hủy không?"
+    ↓
+RAG retrieval:
+  - Booking #1234 info (PostgreSQL)
+  - Cancellation policy của hotel đó
+    ↓
+Context: system prompt + retrieved data + conversation history (10 turns)
+    ↓
+Claude Sonnet (chất lượng cao, hiểu tiếng Việt tốt)
+    ↓
+Response + optional action (nút "Hủy booking" nếu user muốn)
+```
+
+**Backend:**
+- Special conversation type: `conversation_type = "ai_support"`
+- Service: `AIAssistantService` — build context → gọi Claude → trả response
+- Endpoint: `POST /api/v1/support/chat`
+- Streaming: SSE (Server-Sent Events) để response xuất hiện dần
+- Tool use: Claude function calling để trigger actions (cancel booking, check availability)
+
+**Complexity:** High | **Priority:** Medium
+
+---
+
+### 8.5 Feature 4: Dynamic Pricing Suggestion cho Owner
+
+**Use Case:** Owner thấy trên dashboard: _"Phòng Superior tuần tới nên tăng giá 15% vì occupancy cao. Phòng Deluxe nên giảm 10% vì còn nhiều phòng trống."_
+
+**Luồng:**
+```
+Data (PostgreSQL analytics):
+  - Occupancy rate 30 ngày tới mỗi room type
+  - Historical patterns (weekday vs weekend, seasonal)
+  - Current price
+    ↓
+LLM (claude-haiku — structured data → structured output)
+  Output: { room_id, current_price, suggested_price, reason, confidence }
+    ↓
+Lưu vào bảng price_suggestions
+Owner review → "Apply" hoặc bỏ qua
+```
+
+**Backend:**
+- Background job: cron 6 AM hàng ngày trong cmd/worker
+- Endpoint: `GET /api/v1/owner/rooms/:id/pricing-suggestions`
+- Bảng mới: `price_suggestions (room_id, date, suggested_price, reason, applied_at)`
+
+**Complexity:** Medium | **Priority:** Medium
+
+---
+
+### 8.6 Feature 5: Review Sentiment Analysis
+
+**Use Case:**
+- Admin thấy tổng quan: _"Hotel X có 85% tích cực về sạch sẽ, 60% tiêu cực về vị trí"_
+- Auto-detect spam reviews
+- Guest xem AI summary của reviews khi xem hotel detail
+
+**Luồng:**
+```
+Review mới tạo → ReviewService.CreateReview()
+    ↓ (async, qua RabbitMQ queue "review.analysis")
+SentimentWorker:
+  LLM (claude-haiku): Extract { sentiment, topics, spam_score }
+  → Lưu vào review_analysis table
+
+Daily job:
+  Summarize tất cả reviews của hotel
+  LLM: 3-câu summary highlight điểm mạnh/yếu
+  → hotels.ai_summary column
+```
+
+**Complexity:** Low-Medium | **Priority:** Medium (dễ implement, UX tốt)
+
+---
+
+### 8.7 Feature 6: Anomaly Detection cho Admin
+
+**Use Case:** Admin nhận alert: _"Unusual booking spike from IP range 192.168.x — possible fraud"_ hoặc _"Cancellation rate +300% in 2 hours"_.
+
+**Luồng:**
+```
+PostgreSQL booking data + Prometheus metrics
+    ↓
+Statistical baseline: rolling average + stddev (7 days)
+    ↓
+Rule-based detection:
+  - Booking rate > mean + 3σ → flag
+  - Cancel rate > 50% trong 1 giờ → flag
+  - Multiple bookings từ cùng IP → flag
+    ↓
+LLM (claude-haiku): Human-readable explanation + recommendation
+    ↓
+WebSocket broadcast tới admin connections
+```
+
+**Complexity:** Medium | **Priority:** Low
+
+---
+
+### 8.8 Thứ Tự Implementation AI
+
+```
+ 1. [AI-BACKEND] pgvector extension → migration mới
+ 2. [AI-BACKEND] Embedding pipeline: hotel approved → embed → lưu vào hotels.embedding
+ 3. [AI-MOBILE]  Hotel Recommendations UI → GET /hotels/:id/similar
+ 4. [AI-BACKEND] NL Search endpoint → POST /hotels/search/nl (claude-haiku)
+ 5. [AI-MOBILE]  NL Search UI (search bar với natural language input)
+ 6. [AI-WEB]     NL Search trong web (tìm hotel, user bằng mô tả)
+ 7. [AI-BACKEND] Review Sentiment Analysis pipeline (RabbitMQ async)
+ 8. [AI-WEB]     Review Summary trong admin/hotels/[id]
+ 9. [AI-BACKEND] Dynamic Pricing daily cron job
+10. [AI-MOBILE]  Pricing Suggestion UI trong owner dashboard
+11. [AI-BACKEND] AI Support Chatbot (SSE streaming + tool use)
+12. [AI-MOBILE]  Chatbot UI (bottom sheet, typing indicator, SSE streaming)
+13. [AI-BACKEND] Anomaly Detection job
+14. [AI-WEB]     Admin anomaly alerts panel
+```
+
+---
+
+### 8.9 Infrastructure Cần Thêm
+
+| Component | Mục Đích | Chi Phí |
+|-----------|----------|---------|
+| pgvector extension | Vector similarity search | Miễn phí (PostgreSQL extension) |
+| Claude API (Anthropic) | LLM inference | ~$0.25/1M input tokens (Haiku) |
+| Embedding API | text-embedding-3-small | ~$0.02/1M tokens |
+| Redis | Cache LLM responses (đã có) | Miễn phí (tái sử dụng) |
+
+**Không cần:** Pinecone, Weaviate hay dedicated vector DB.
+
+### 8.10 Cost Management
+
+- **Cache LLM responses:** Redis TTL 1h cho NL search, 24h cho hotel summaries
+- **Model selection:** claude-haiku cho extraction/structured output, claude-sonnet chỉ cho chatbot
+- **Prompt Caching (Anthropic):** Tái sử dụng system prompts → giảm ~90% cost
+- **Batch processing:** Sentiment analysis chạy async, không realtime
+- **Rate limit AI endpoints:** 10 NL queries/phút/user, 50 recommendations/giờ/user
+
+---
+
 *PLAN.md được tạo dựa trên phân tích toàn bộ source code tại thời điểm 2026-04-16.*
 *Backend: Go + Gin | Web: Next.js 15 | Mobile: Expo (React Native)*
+*Section 8 (AI/LLM Roadmap) được thêm 2026-04-16 — áp dụng sau khi hoàn thành 19 core tasks.*
