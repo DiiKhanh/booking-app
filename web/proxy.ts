@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/forgot-password"];
 const OWNER_PATHS = ["/owner"];
 const ADMIN_PATHS = ["/admin"];
 
@@ -14,17 +14,14 @@ export function proxy(request: NextRequest) {
 
   // Allow public paths and Next.js internals
   if (
-    PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
+    PUBLIC_PATHS.some(
+      (p) => pathname === p || (p !== "/" && pathname.startsWith(p)),
+    ) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api") ||
     pathname === "/favicon.ico"
   ) {
     return NextResponse.next();
-  }
-
-  // Root: redirect to login
-  if (pathname === "/") {
-    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   const role = getRole(request);
@@ -39,7 +36,9 @@ export function proxy(request: NextRequest) {
   // Owner-only routes — owner and admin can both access
   if (OWNER_PATHS.some((p) => pathname.startsWith(p))) {
     if (role !== "owner" && role !== "admin") {
-      return NextResponse.redirect(new URL("/login?error=forbidden", request.url));
+      return NextResponse.redirect(
+        new URL("/login?error=forbidden", request.url),
+      );
     }
   }
 
@@ -54,5 +53,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

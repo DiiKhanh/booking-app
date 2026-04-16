@@ -6,7 +6,7 @@ import type { UserRole } from "@/types/user.types";
 
 export function useAuth() {
   const router = useRouter();
-  const { user, tokens, isAuthenticated, isLoading, setUser, setTokens, setLoading, signOut } =
+  const { user, isAuthenticated, isLoading, setUser, setLoading, signOut } =
     useAuthStore();
 
   const login = useCallback(
@@ -14,17 +14,11 @@ export function useAuth() {
       setLoading(true);
       try {
         const { data } = await apiClient.post<{
-          data: {
-            user: NonNullable<typeof user>;
-            accessToken: string;
-            refreshToken: string;
-            expiresAt: number;
-          };
+          data: { user: NonNullable<typeof user> };
         }>("/auth/login", { email, password });
 
-        const { user: u, accessToken, refreshToken, expiresAt } = data.data;
+        const { user: u } = data.data;
         setUser(u);
-        setTokens({ accessToken, refreshToken, expiresAt });
 
         if (u.role === "admin") router.push("/admin/dashboard");
         else if (u.role === "owner") router.push("/owner/dashboard");
@@ -33,7 +27,7 @@ export function useAuth() {
         setLoading(false);
       }
     },
-    [router, setLoading, setTokens, setUser]
+    [router, setLoading, setUser]
   );
 
   const logout = useCallback(() => {
@@ -48,7 +42,6 @@ export function useAuth() {
 
   return {
     user,
-    tokens,
     isAuthenticated,
     isLoading,
     login,
