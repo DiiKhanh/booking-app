@@ -82,7 +82,7 @@ func (m *mockChatSvc) GetConversationByID(ctx context.Context, id int64, userID 
 func setupChatRouter(svc *mockChatSvc, userID string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handler.NewChatHandler(svc, handler.NewHub())
+	h := handler.NewChatHandler(svc, handler.NewHub(), nil)
 
 	auth := func(c *gin.Context) {
 		c.Set("userID", userID)

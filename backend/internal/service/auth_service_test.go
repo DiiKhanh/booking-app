@@ -80,6 +80,10 @@ func (m *mockUserRepo) UpdateUserPassword(ctx context.Context, userID, passwordH
 	return nil
 }
 
+func (m *mockUserRepo) ListUsersByRole(ctx context.Context, role string, limit int) ([]*domain.User, error) {
+	return []*domain.User{}, nil
+}
+
 func (m *mockPasswordResetRepo) Create(ctx context.Context, reset *domain.PasswordReset) error {
 	if m.createFn != nil {
 		return m.createFn(ctx, reset)

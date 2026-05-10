@@ -4,6 +4,7 @@ import (
 	"booking-app/internal/domain"
 	"booking-app/internal/dto/request"
 	"booking-app/internal/dto/response"
+	"booking-app/internal/repository"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,13 +28,14 @@ type ChatHandlerServiceInterface interface {
 
 // ChatHandler handles HTTP requests for chat endpoints.
 type ChatHandler struct {
-	svc ChatHandlerServiceInterface
-	hub *Hub
+	svc      ChatHandlerServiceInterface
+	hub      *Hub
+	userRepo repository.UserRepository
 }
 
-// NewChatHandler creates a new ChatHandler wired to the given service and Hub.
-func NewChatHandler(svc ChatHandlerServiceInterface, hub *Hub) *ChatHandler {
-	return &ChatHandler{svc: svc, hub: hub}
+// NewChatHandler creates a new ChatHandler wired to the given service, Hub, and user repository.
+func NewChatHandler(svc ChatHandlerServiceInterface, hub *Hub, userRepo repository.UserRepository) *ChatHandler {
+	return &ChatHandler{svc: svc, hub: hub, userRepo: userRepo}
 }
 
 // CreateConversation handles POST /api/v1/conversations.
@@ -191,6 +193,37 @@ func (h *ChatHandler) UnreadCount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response.OK(response.UnreadCountResponse{Count: count}))
+}
+
+// ListContacts handles GET /api/v1/chat/contacts.
+// Returns available chat partners: admins (for owners) or owners (for admins).
+func (h *ChatHandler) ListContacts(c *gin.Context) {
+	role := c.GetString("userRole")
+	targetRole := "admin"
+	if role == "admin" {
+		targetRole = "owner"
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	users, err := h.userRepo.ListUsersByRole(ctx, targetRole, 20)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, response.Fail("internal server error"))
+		return
+	}
+
+	type ContactResponse struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	contacts := make([]ContactResponse, len(users))
+	for i, u := range users {
+		contacts[i] = ContactResponse{ID: u.ID, Name: u.FullName, Email: u.Email, Role: string(u.Role)}
+	}
+	c.JSON(http.StatusOK, response.OK(contacts))
 }
 
 // BroadcastAnnouncement handles POST /api/v1/admin/broadcast.

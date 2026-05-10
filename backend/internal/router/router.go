@@ -190,12 +190,13 @@ func New(
 			chatGroup.PUT("/:id/read", chatHandler.MarkRead)
 		}
 
-		// Unread count (separate path prefix to avoid conflict with conversation :id routes).
+		// Unread count and contacts (separate path prefix to avoid conflict with conversation :id routes).
 		chatUnread := v1.Group("/chat")
 		chatUnread.Use(middleware.JWTAuth(tokenMgr))
 		chatUnread.Use(middleware.RateLimiter(redisClient, rateLimitAuth, time.Minute, "rl:auth"))
 		{
 			chatUnread.GET("/unread-count", chatHandler.UnreadCount)
+			chatUnread.GET("/contacts", chatHandler.ListContacts)
 		}
 
 		// ----- Notification routes (JWT required + auth rate limit) -----

@@ -2,12 +2,13 @@
 
 import { MessageSquare, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Conversation } from "@/types/chat.types";
+import type { Conversation, ChatContact } from "@/types/chat.types";
 
 interface ConversationListProps {
   readonly conversations: Conversation[];
   readonly selectedId?: number;
   readonly currentUserId: string;
+  readonly contacts?: ChatContact[];
   readonly onSelect: (conv: Conversation) => void;
 }
 
@@ -30,6 +31,7 @@ export function ConversationList({
   conversations,
   selectedId,
   currentUserId,
+  contacts = [],
   onSelect,
 }: ConversationListProps) {
   if (conversations.length === 0) {
@@ -42,18 +44,17 @@ export function ConversationList({
   }
 
   return (
-    <div className="divide-y divide-border overflow-y-auto h-full">
+    <div className="divide-y divide-border">
       {conversations.map((conv) => {
         const otherId =
           conv.participantA === currentUserId
             ? conv.participantB
             : conv.participantA;
+        const contact = contacts.find((c) => c.id === otherId);
         const displayName =
           conv.type === "broadcast"
             ? "Broadcast"
-            : otherId
-              ? `User ${otherId.slice(0, 8)}…`
-              : "Unknown";
+            : contact?.name ?? (otherId ? `User ${otherId.slice(0, 8)}…` : "Unknown");
         const hasUnread = conv.unreadCount > 0;
         const isSelected = conv.id === selectedId;
 
@@ -63,7 +64,7 @@ export function ConversationList({
             type="button"
             onClick={() => onSelect(conv)}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50",
+              "w-full min-w-0 flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/50",
               isSelected && "bg-accent",
               hasUnread && !isSelected && "bg-blue-50/60 dark:bg-blue-950/20",
             )}

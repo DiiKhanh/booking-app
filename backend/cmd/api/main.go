@@ -173,7 +173,7 @@ func main() {
 	paymentHandler := handler.NewPaymentHandler(paymentSvc, sagaOrch)
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
-	chatHandler := handler.NewChatHandler(chatSvc, hub)
+	chatHandler := handler.NewChatHandler(chatSvc, hub, userRepo)
 	wsHandler := handler.NewWSHandler(hub, tokenMgr, redisClient, handler.WithChatService(chatSvc))
 	adminHandler := handler.NewAdminHandler(adminSvc)
 

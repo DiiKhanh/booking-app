@@ -31,16 +31,21 @@ type MessageResponse struct {
 
 // NewConversationResponse maps a domain.Conversation to its API representation.
 func NewConversationResponse(c *domain.Conversation) *ConversationResponse {
-	return &ConversationResponse{
+	resp := &ConversationResponse{
 		ID:            c.ID,
 		Type:          string(c.Type),
 		HotelID:       c.HotelID,
 		BookingID:     c.BookingID,
 		ParticipantA:  c.ParticipantA,
 		ParticipantB:  c.ParticipantB,
+		UnreadCount:   c.UnreadCount,
 		LastMessageAt: c.LastMessageAt,
 		CreatedAt:     c.CreatedAt,
 	}
+	if c.LastMessage != nil {
+		resp.LastMessage = NewMessageResponse(c.LastMessage)
+	}
+	return resp
 }
 
 // NewMessageResponse maps a domain.Message to its API representation.

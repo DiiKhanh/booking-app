@@ -51,6 +51,8 @@ type UserRepository interface {
 	ListUsers(ctx context.Context, page, limit int) ([]*domain.User, int, error)
 	UpdateUserRole(ctx context.Context, id string, role domain.Role) error
 	DeactivateUser(ctx context.Context, id string) error
+	// Chat contact discovery
+	ListUsersByRole(ctx context.Context, role string, limit int) ([]*domain.User, error)
 }
 
 // PasswordResetRepository defines data access for password reset tokens.

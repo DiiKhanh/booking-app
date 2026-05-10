@@ -208,6 +208,37 @@ func (r *pgUserRepo) UpdateUserRole(ctx context.Context, id string, role domain.
 	return nil
 }
 
+// ListUsersByRole returns active users that have the given role, ordered by full_name ASC.
+func (r *pgUserRepo) ListUsersByRole(ctx context.Context, role string, limit int) ([]*domain.User, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, email, full_name, phone, avatar_url, role, is_active, created_at, updated_at
+		FROM users
+		WHERE role = $1 AND is_active = true
+		ORDER BY full_name ASC
+		LIMIT $2
+	`, role, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list users by role: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*domain.User
+	for rows.Next() {
+		u := &domain.User{}
+		if err := rows.Scan(&u.ID, &u.Email, &u.FullName, &u.Phone, &u.AvatarURL, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan user row: %w", err)
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate user rows: %w", err)
+	}
+	if users == nil {
+		users = []*domain.User{}
+	}
+	return users, nil
+}
+
 // DeactivateUser sets is_active=false for the given user.
 func (r *pgUserRepo) DeactivateUser(ctx context.Context, id string) error {
 	res, err := r.db.ExecContext(ctx,

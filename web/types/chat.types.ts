@@ -37,3 +37,10 @@ export interface BroadcastInput {
   content: string;
   hotelId?: number;
 }
+
+export interface ChatContact {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}

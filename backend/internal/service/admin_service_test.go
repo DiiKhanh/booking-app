@@ -70,6 +70,10 @@ func (m *mockAdminUserRepo) UpdateUserPassword(ctx context.Context, userID, pass
 	return nil
 }
 
+func (m *mockAdminUserRepo) ListUsersByRole(ctx context.Context, role string, limit int) ([]*domain.User, error) {
+	return []*domain.User{}, nil
+}
+
 // --- Mock BookingRepository (admin extension) ---
 
 type mockAdminBookingRepo struct {

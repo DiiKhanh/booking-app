@@ -6,6 +6,7 @@ import type {
   CreateConversationInput,
   SendMessageInput,
   BroadcastInput,
+  ChatContact,
 } from "@/types/chat.types";
 
 function mapConversation(raw: Record<string, unknown>): Conversation {
@@ -40,7 +41,7 @@ export const chatService = {
   getOrCreateConversation: (input: CreateConversationInput) =>
     apiClient
       .post<ApiResponse<Record<string, unknown>>>("/conversations", {
-        participant_b: input.participantB,
+        participant_id: input.participantB,
         hotel_id: input.hotelId,
         booking_id: input.bookingId,
       })
@@ -88,6 +89,11 @@ export const chatService = {
     apiClient
       .get<ApiResponse<{ total: number }>>("/chat/unread-count")
       .then((r) => r.data),
+
+  getContacts: () =>
+    apiClient
+      .get<ApiResponse<ChatContact[]>>("/chat/contacts")
+      .then((r) => ({ ...r.data, data: r.data.data ?? [] })),
 
   broadcast: (input: BroadcastInput) =>
     apiClient

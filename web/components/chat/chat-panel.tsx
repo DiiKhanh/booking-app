@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ActivityIcon, Loader2 } from "lucide-react";
+import { ActivityIcon, Loader2, Plus, X, User } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { ConversationList } from "./conversation-list";
 import { MessageBubble } from "./message-bubble";
 import { ChatInput } from "./chat-input";
 import { chatService } from "@/services/chat.service";
 import { useChatStore } from "@/stores/chat.store";
 import { useAuthStore } from "@/stores/auth.store";
-import type { Conversation } from "@/types/chat.types";
+import type { Conversation, ChatContact } from "@/types/chat.types";
 
 export function ChatPanel() {
   const userId = useAuthStore((s) => s.user?.id ?? "");
@@ -30,6 +30,10 @@ export function ChatPanel() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [showNewChat, setShowNewChat] = useState(false);
+  const [contacts, setContacts] = useState<ChatContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [startingWith, setStartingWith] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Load conversation list
@@ -42,6 +46,13 @@ export function ChatPanel() {
   useEffect(() => {
     if (data?.data) setConversations(data.data);
   }, [data, setConversations]);
+
+  // Load contacts for name display (best-effort, non-blocking)
+  useEffect(() => {
+    chatService.getContacts().then((r) => {
+      if (r.data?.length) setContacts(r.data);
+    }).catch(() => {});
+  }, []);
 
   const sortedConversations = [...conversations].sort(
     (a, b) =>
@@ -83,6 +94,32 @@ export function ChatPanel() {
     }
   };
 
+  const handleOpenNewChat = async () => {
+    setShowNewChat(true);
+    setLoadingContacts(true);
+    try {
+      const res = await chatService.getContacts();
+      setContacts(res.data ?? []);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  const handleStartWithContact = async (contact: ChatContact) => {
+    setStartingWith(contact.id);
+    try {
+      const res = await chatService.getOrCreateConversation({ participantB: contact.id });
+      if (res.data) {
+        const conv = res.data;
+        useChatStore.getState().addOrUpdateConversation(conv);
+        setShowNewChat(false);
+        await handleSelectConv(conv);
+      }
+    } finally {
+      setStartingWith(null);
+    }
+  };
+
   const handleLoadMore = async () => {
     if (!selectedConv || loadingMore || !hasMore) return;
     const msgs = messagesByConversation[selectedConv.id] ?? [];
@@ -119,24 +156,81 @@ export function ChatPanel() {
   return (
     <div className="flex h-full border border-border rounded-xl overflow-hidden bg-background">
       {/* Sidebar */}
-      <div className="w-80 shrink-0 border-r border-border flex flex-col">
-        <div className="px-4 py-3 border-b border-border">
+      <div className="w-80 shrink-0 border-r border-border flex flex-col relative overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">
             Conversations
           </h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 cursor-pointer"
+            onClick={handleOpenNewChat}
+            title="Start new conversation"
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
         </div>
-        {listLoading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+
+        {/* New Chat overlay */}
+        {showNewChat && (
+          <div className="absolute inset-0 z-10 bg-background flex flex-col border-r border-border">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground">New Conversation</h2>
+              <Button variant="ghost" size="icon" className="h-7 w-7 cursor-pointer" onClick={() => setShowNewChat(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {loadingContacts ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : contacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-12 px-4">No contacts available</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {contacts.map((contact) => (
+                    <button
+                      key={contact.id}
+                      type="button"
+                      disabled={startingWith === contact.id}
+                      onClick={() => handleStartWithContact(contact)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors text-left cursor-pointer disabled:opacity-50"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{contact.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{contact.email}</p>
+                      </div>
+                      {startingWith === contact.id && (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground ml-auto shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
-          <ConversationList
-            conversations={sortedConversations}
-            selectedId={selectedConv?.id}
-            currentUserId={userId}
-            onSelect={handleSelectConv}
-          />
         )}
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {listLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <ConversationList
+              conversations={sortedConversations}
+              selectedId={selectedConv?.id}
+              currentUserId={userId}
+              contacts={contacts}
+              onSelect={handleSelectConv}
+            />
+          )}
+        </div>
       </div>
 
       {/* Chat area */}
@@ -152,9 +246,13 @@ export function ChatPanel() {
                 <p className="text-sm font-semibold">
                   {selectedConv.type === "broadcast"
                     ? "Broadcast"
-                    : selectedConv.participantA === userId
-                      ? `User ${(selectedConv.participantB ?? "").slice(0, 8)}…`
-                      : `User ${selectedConv.participantA.slice(0, 8)}…`}
+                    : (() => {
+                        const otherId = selectedConv.participantA === userId
+                          ? selectedConv.participantB
+                          : selectedConv.participantA;
+                        const contact = contacts.find((c) => c.id === otherId);
+                        return contact ? contact.name : `User ${(otherId ?? "").slice(0, 8)}…`;
+                      })()}
                 </p>
                 {typingInConv && (
                   <p className="text-xs text-muted-foreground">typing…</p>
@@ -168,7 +266,7 @@ export function ChatPanel() {
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <ScrollArea className="flex-1 px-4 py-2">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-2">
                 {hasMore && (
                   <div className="flex justify-center mb-2">
                     <button
@@ -189,7 +287,7 @@ export function ChatPanel() {
                   />
                 ))}
                 <div ref={bottomRef} />
-              </ScrollArea>
+              </div>
             )}
 
             {/* Input */}

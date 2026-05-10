@@ -20,6 +20,9 @@ type Conversation struct {
 	ParticipantB  *string // recipient (owner); nil for broadcast
 	LastMessageAt time.Time
 	CreatedAt     time.Time
+	// Populated by ListConversationsByUser for richer list responses.
+	UnreadCount int
+	LastMessage *Message
 }
 
 // IsParticipant reports whether userID is allowed to read/write in this conversation.

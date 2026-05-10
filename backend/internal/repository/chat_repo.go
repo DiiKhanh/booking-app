@@ -80,6 +80,7 @@ func (r *ChatRepo) FindDirectConversation(ctx context.Context, participantA, par
 }
 
 // ListConversationsByUser returns paginated conversations for a user, sorted by last_message_at DESC.
+// Each conversation is enriched with unread_count and last_message via a lateral join.
 func (r *ChatRepo) ListConversationsByUser(ctx context.Context, userID string, page, limit int) ([]*domain.Conversation, int, error) {
 	offset := (page - 1) * limit
 
@@ -92,10 +93,25 @@ func (r *ChatRepo) ListConversationsByUser(ctx context.Context, userID string, p
 	}
 
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, type, hotel_id, booking_id, participant_a, participant_b, last_message_at, created_at
-		FROM conversations
-		WHERE participant_a = $1 OR participant_b = $1
-		ORDER BY last_message_at DESC
+		SELECT
+			c.id, c.type, c.hotel_id, c.booking_id,
+			c.participant_a, c.participant_b,
+			c.last_message_at, c.created_at,
+			COALESCE((
+				SELECT COUNT(*) FROM messages m
+				WHERE m.conversation_id = c.id
+				  AND m.sender_id != $1
+				  AND m.is_read = false
+			), 0) AS unread_count,
+			lm.id, lm.conversation_id, lm.sender_id, lm.content, lm.is_read, lm.created_at
+		FROM conversations c
+		LEFT JOIN LATERAL (
+			SELECT * FROM messages
+			WHERE conversation_id = c.id
+			ORDER BY id DESC LIMIT 1
+		) lm ON true
+		WHERE c.participant_a = $1 OR c.participant_b = $1
+		ORDER BY c.last_message_at DESC
 		LIMIT $2 OFFSET $3
 	`, userID, limit, offset)
 	if err != nil {
@@ -106,18 +122,37 @@ func (r *ChatRepo) ListConversationsByUser(ctx context.Context, userID string, p
 	var convs []*domain.Conversation
 	for rows.Next() {
 		c := &domain.Conversation{}
+		var (
+			lmID        sql.NullInt64
+			lmConvID    sql.NullInt64
+			lmSenderID  sql.NullString
+			lmContent   sql.NullString
+			lmIsRead    sql.NullBool
+			lmCreatedAt sql.NullTime
+		)
 		if err := rows.Scan(
 			&c.ID, &c.Type, &c.HotelID, &c.BookingID,
 			&c.ParticipantA, &c.ParticipantB, &c.LastMessageAt, &c.CreatedAt,
+			&c.UnreadCount,
+			&lmID, &lmConvID, &lmSenderID, &lmContent, &lmIsRead, &lmCreatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan conversation row: %w", err)
+		}
+		if lmID.Valid {
+			c.LastMessage = &domain.Message{
+				ID:             lmID.Int64,
+				ConversationID: lmConvID.Int64,
+				SenderID:       lmSenderID.String,
+				Content:        lmContent.String,
+				IsRead:         lmIsRead.Bool,
+				CreatedAt:      lmCreatedAt.Time,
+			}
 		}
 		convs = append(convs, c)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("iterate conversation rows: %w", err)
 	}
-
 	if convs == nil {
 		convs = []*domain.Conversation{}
 	}
