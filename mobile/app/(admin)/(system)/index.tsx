@@ -145,7 +145,7 @@ export default function SystemHealthScreen() {
         className="flex-1"
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF5733" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#B8860B" />
         }
       >
         {/* Overall status */}

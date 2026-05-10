@@ -167,7 +167,7 @@ export default function SplashScreen() {
               className="h-24 w-24 items-center justify-center rounded-3xl"
               style={{ backgroundColor: "rgba(255, 255, 255, 0.15)" }}
             >
-              <Ionicons name="bed-outline" size={48} color="#FF5733" />
+              <Ionicons name="bed-outline" size={48} color="#B8860B" />
             </View>
           </Animated.View>
 
@@ -178,7 +178,7 @@ export default function SplashScreen() {
               style={{ fontFamily: "PlusJakartaSans-Bold" }}
             >
               Stay
-              <Text style={{ color: "#FF5733" }}>Ease</Text>
+              <Text style={{ color: "#B8860B" }}>Ease</Text>
             </Text>
           </Animated.View>
 
@@ -207,7 +207,7 @@ export default function SplashScreen() {
                 style={{
                   backgroundColor:
                     i === 1
-                      ? "#FF5733"
+                      ? "#B8860B"
                       : "rgba(255, 255, 255, 0.4)",
                 }}
               />

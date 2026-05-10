@@ -169,8 +169,8 @@ export default function OwnerDashboardScreen() {
             className="flex-1 rounded-2xl items-center justify-center py-4"
             style={{ backgroundColor: "#FFF0EC" }}
           >
-            <Ionicons name="receipt-outline" size={24} color="#FF5733" />
-            <Text className="mt-1.5 text-xs" style={{ fontFamily: "Inter-Medium", color: "#FF5733" }}>
+            <Ionicons name="receipt-outline" size={24} color="#B8860B" />
+            <Text className="mt-1.5 text-xs" style={{ fontFamily: "Inter-Medium", color: "#B8860B" }}>
               Reservations
             </Text>
           </TouchableOpacity>
@@ -197,7 +197,7 @@ export default function OwnerDashboardScreen() {
             Recent Bookings
           </Text>
           <TouchableOpacity onPress={() => router.push("/(owner)/(reservations)/")}>
-            <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#FF5733" }}>
+            <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#B8860B" }}>
               View All
             </Text>
           </TouchableOpacity>
@@ -251,7 +251,7 @@ export default function OwnerDashboardScreen() {
                       <StatusBadge status={booking.status ?? "pending"} />
                       <Text
                         className="text-sm"
-                        style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}
+                        style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}
                       >
                         {formatCurrency(booking.totalPrice ?? 0, "USD")}
                       </Text>

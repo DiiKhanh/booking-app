@@ -108,7 +108,7 @@ function MiniCalendar({
                 className="h-9 w-9 items-center justify-center rounded-full"
                 style={{
                   backgroundColor:
-                    isCheckIn || isCheckOut ? "#FF5733"
+                    isCheckIn || isCheckOut ? "#B8860B"
                     : isInRange ? "#FFF0EC"
                     : "transparent",
                 }}
@@ -120,7 +120,7 @@ function MiniCalendar({
                       ? "PlusJakartaSans-SemiBold" : "Inter-Regular",
                     color: isPast ? "#CBD5E1"
                       : isCheckIn || isCheckOut ? "#fff"
-                      : isInRange ? "#FF5733"
+                      : isInRange ? "#B8860B"
                       : isToday ? "#1A3A6B"
                       : "#334155",
                   }}
@@ -227,7 +227,7 @@ export default function BookingFormScreen() {
                 Up to {capacity} guests
               </Text>
             </View>
-            <Text className="text-base" style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}>
+            <Text className="text-base" style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}>
               {formatCurrency(pricePerNight, currency)}/night
             </Text>
           </View>
@@ -243,11 +243,11 @@ export default function BookingFormScreen() {
               onPress={() => setSelectingDate("checkIn")}
               className="flex-1 rounded-2xl border-2 p-4"
               style={{
-                borderColor: selectingDate === "checkIn" ? "#FF5733" : "#E2E8F0",
+                borderColor: selectingDate === "checkIn" ? "#B8860B" : "#E2E8F0",
                 backgroundColor: selectingDate === "checkIn" ? "#FFF0EC" : "#fff",
               }}
             >
-              <Text className="text-xs uppercase tracking-wide" style={{ fontFamily: "Inter-Medium", color: selectingDate === "checkIn" ? "#FF5733" : "#94A3B8" }}>
+              <Text className="text-xs uppercase tracking-wide" style={{ fontFamily: "Inter-Medium", color: selectingDate === "checkIn" ? "#B8860B" : "#94A3B8" }}>
                 Check-in
               </Text>
               <Text className="mt-1 text-base text-neutral-900" style={{ fontFamily: "PlusJakartaSans-SemiBold" }}>
@@ -269,11 +269,11 @@ export default function BookingFormScreen() {
               onPress={() => setSelectingDate("checkOut")}
               className="flex-1 rounded-2xl border-2 p-4"
               style={{
-                borderColor: selectingDate === "checkOut" ? "#FF5733" : "#E2E8F0",
+                borderColor: selectingDate === "checkOut" ? "#B8860B" : "#E2E8F0",
                 backgroundColor: selectingDate === "checkOut" ? "#FFF0EC" : "#fff",
               }}
             >
-              <Text className="text-xs uppercase tracking-wide" style={{ fontFamily: "Inter-Medium", color: selectingDate === "checkOut" ? "#FF5733" : "#94A3B8" }}>
+              <Text className="text-xs uppercase tracking-wide" style={{ fontFamily: "Inter-Medium", color: selectingDate === "checkOut" ? "#B8860B" : "#94A3B8" }}>
                 Check-out
               </Text>
               <Text className="mt-1 text-base text-neutral-900" style={{ fontFamily: "PlusJakartaSans-SemiBold" }}>
@@ -378,7 +378,7 @@ export default function BookingFormScreen() {
               <Text className="text-base text-neutral-900" style={{ fontFamily: "PlusJakartaSans-SemiBold" }}>
                 Total
               </Text>
-              <Text className="text-lg" style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}>
+              <Text className="text-lg" style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}>
                 {formatCurrency(total, currency)}
               </Text>
             </View>

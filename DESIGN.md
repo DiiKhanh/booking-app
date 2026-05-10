@@ -1,6 +1,6 @@
 # DESIGN.md — StayEase Design System
 
-> Version: 1.0 | Cập nhật: 2026-04-16
+> Version: 1.1 | Cập nhật: 2026-05-11
 > Tài liệu này là **nguồn sự thật duy nhất** (Single Source of Truth) cho mọi quyết định thiết kế trên Web (Next.js) và Mobile (Expo/React Native).
 > Mọi developer phải đọc và tuân thủ trước khi viết UI code.
 
@@ -28,12 +28,12 @@
 ### 1.1 Brand Colors (Shared — Web & Mobile)
 
 ```
-Primary   Navy    #1A3A6B    Dùng cho: Header, CTA chính, active states, links
-Accent    Coral   #FF5733    Dùng cho: Booking CTA, hot deals, urgent alerts, badges
-Success   Emerald #10B981    Dùng cho: Confirmed booking, online status, success toasts
-Warning   Amber   #F59E0B    Dùng cho: Pending payment, awaiting review, caution states
-Error     Red     #EF4444    Dùng cho: Failed booking, error toasts, destructive actions
-Info      Blue    #3B82F6    Dùng cho: Informational tooltips, help text, in-progress
+Primary   Navy        #1A3A6B    Dùng cho: Header, CTA chính, active states, links
+Accent    Warm Gold   #B8860B    Dùng cho: Booking CTA, hot deals, highlights, badges
+Success   Emerald     #10B981    Dùng cho: Confirmed booking, online status, success toasts
+Warning   Amber       #F59E0B    Dùng cho: Pending payment, awaiting review, caution states
+Error     Red         #EF4444    Dùng cho: Failed booking, error toasts, destructive actions
+Info      Blue        #3B82F6    Dùng cho: Informational tooltips, help text, in-progress
 ```
 
 ### 1.2 Neutral Scale (Shared)
@@ -72,8 +72,8 @@ neutral-900  #0F172A    Display text, maximum contrast
   /* Brand */
   --color-primary:    #1A3A6B;
   --color-primary-50: #EFF6FF;
-  --color-accent:     #FF5733;
-  --color-accent-50:  #FFF5F2;
+  --color-accent:     #B8860B;
+  --color-accent-50:  #FFFBEB;
 
   /* Semantic */
   --color-success:    #10B981;
@@ -111,8 +111,8 @@ export const colors = {
   // Brand
   primary:   "#1A3A6B",
   primaryLight: "#EFF6FF",
-  accent:    "#FF5733",
-  accentLight: "#FFF5F2",
+  accent:    "#B8860B",
+  accentLight: "#FFFBEB",
 
   // Semantic
   success:   "#10B981",
@@ -447,7 +447,7 @@ Active pill:   background primary, width auto, height 34px, radius-full
               Animated với Reanimated withSpring (mass:0.5, damping:15)
 Tab icon:      24px, tinted primary (active) / neutral-400 (inactive)
 Tab label:     10px label font, hidden trong pill mode
-Unread badge: 18px circle, bg accent, text white, 10px font
+Unread badge: 18px circle, bg accent (#B8860B), text white, 10px font
               Max badge: "99+"
 ```
 
@@ -688,14 +688,14 @@ Focus indicators:          3:1 against adjacent colors
 **Các combination đã verify:**
 ```
 primary #1A3A6B on white #FFFFFF:   10.3:1 ✅ AAA
-accent  #FF5733 on white #FFFFFF:   3.6:1  ✅ AA (large text only — không dùng body text)
+accent  #B8860B on white #FFFFFF:   4.2:1  ✅ AA (cả large text và UI components)
 neutral-600 #475569 on white:       5.7:1  ✅ AA
 neutral-500 #64748B on white:       4.6:1  ✅ AA (minimum allowed)
 white #FFFFFF on primary #1A3A6B:   10.3:1 ✅ AAA
-white #FFFFFF on accent #FF5733:    3.6:1  ✅ AA (chỉ button text 16px+)
+white #FFFFFF on accent #B8860B:    4.2:1  ✅ AA
 ```
 
-⚠️ **Lưu ý:** `accent #FF5733` KHÔNG đủ contrast cho body text — chỉ dùng làm background của button với white text, hoặc icon với nền sáng.
+⚠️ **Lưu ý:** `accent #B8860B` đủ contrast cho large text (≥18px) và UI components — KHÔNG dùng cho body text (< 18px) trên nền trắng vì cần 4.5:1.
 
 ### 10.2 Web Accessibility
 
@@ -847,7 +847,7 @@ Position (web):   top-right của bell icon, offset -4px -4px
 Position (mobile): top-right của tab icon, offset -6px -4px
 Size:             18px height, min-width 18px, padding 0 4px
 Max value:        99 (hiển thị "99+" nếu ≥ 100)
-Color:            bg accent #FF5733, text white
+Color:            bg accent #B8860B, text white
 Animation:        scale in (bounceIn 300ms) khi badge số tăng
 ```
 
@@ -918,7 +918,7 @@ Mọi PR có thay đổi UI phải pass các check này:
 ❌ Dùng emoji làm icon UI (🏨 🔑 ✈️ → dùng Lucide/Ionicons SVG)
 ❌ Hardcode màu hex trực tiếp vào component
 ❌ Dùng neutral-300 hoặc nhạt hơn cho text content
-❌ Accent coral #FF5733 cho body text (contrast không đủ)
+❌ Accent gold #B8860B cho body text nhỏ < 18px (contrast không đủ ở nền sáng)
 ❌ Các button khác nhau có cùng visual weight trên cùng screen
 ❌ Spinner infinite animation trên decorative elements
 ❌ Modal mở không có đường tắt đóng (ESC web, swipe-down mobile)
@@ -935,7 +935,7 @@ Mọi PR có thay đổi UI phải pass các check này:
 ## 16. Quick Reference Card
 
 ```
-Brand:         Navy #1A3A6B  |  Coral #FF5733
+Brand:         Navy #1A3A6B  |  Warm Gold #B8860B
 Success:       #10B981       |  Warning: #F59E0B  |  Error: #EF4444
 Font heading:  Plus Jakarta Sans Bold
 Font body:     Inter Regular

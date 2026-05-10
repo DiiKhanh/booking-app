@@ -282,7 +282,7 @@ export default function BookingReviewScreen() {
                 </Text>
                 <Text
                   className="text-xl"
-                  style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}
+                  style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}
                 >
                   {formatCurrency(total, currency)}
                 </Text>
@@ -415,9 +415,9 @@ export default function BookingReviewScreen() {
             <View
               className="mt-0.5 h-5 w-5 items-center justify-center rounded"
               style={{
-                backgroundColor: agreedToTerms ? "#FF5733" : "#fff",
+                backgroundColor: agreedToTerms ? "#B8860B" : "#fff",
                 borderWidth: 2,
-                borderColor: agreedToTerms ? "#FF5733" : "#CBD5E1",
+                borderColor: agreedToTerms ? "#B8860B" : "#CBD5E1",
               }}
             >
               {agreedToTerms && (
@@ -433,11 +433,11 @@ export default function BookingReviewScreen() {
               }}
             >
               I agree to the{" "}
-              <Text style={{ color: "#FF5733", fontFamily: "Inter-Medium" }}>
+              <Text style={{ color: "#B8860B", fontFamily: "Inter-Medium" }}>
                 Terms of Service
               </Text>{" "}
               and{" "}
-              <Text style={{ color: "#FF5733", fontFamily: "Inter-Medium" }}>
+              <Text style={{ color: "#B8860B", fontFamily: "Inter-Medium" }}>
                 Cancellation Policy
               </Text>
             </Text>

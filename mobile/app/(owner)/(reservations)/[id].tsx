@@ -175,7 +175,7 @@ export default function ReservationDetailScreen() {
               <Text className="text-base" style={{ fontFamily: "PlusJakartaSans-SemiBold", color: "#1E293B" }}>
                 Total
               </Text>
-              <Text className="text-xl" style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}>
+              <Text className="text-xl" style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}>
                 {formatCurrency(booking.totalPrice ?? 0, "USD")}
               </Text>
             </View>

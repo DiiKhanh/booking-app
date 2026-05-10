@@ -87,7 +87,7 @@ function BookingCard({ booking, index }: { booking: Booking; index: number }) {
               {config.label}
             </Text>
           </View>
-          <Text className="text-base" style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}>
+          <Text className="text-base" style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}>
             {formatCurrency(booking.totalPrice ?? 0, "USD")}
           </Text>
         </View>
@@ -176,7 +176,7 @@ export default function ReservationsScreen() {
         contentContainerStyle={{ paddingTop: 16, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5733" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#B8860B" />
         }
         ListEmptyComponent={
           !isLoading ? (

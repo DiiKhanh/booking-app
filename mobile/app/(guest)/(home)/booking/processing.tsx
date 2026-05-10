@@ -62,7 +62,7 @@ function SpinnerDot() {
 
   return (
     <Animated.View style={{ transform: [{ rotate }] }}>
-      <Ionicons name="reload" size={20} color="#FF5733" />
+      <Ionicons name="reload" size={20} color="#B8860B" />
     </Animated.View>
   );
 }
@@ -163,7 +163,7 @@ export default function ProcessingScreen() {
                     backgroundColor: isDone
                       ? "#10B981"
                       : isActive
-                        ? "#FF5733"
+                        ? "#B8860B"
                         : "#F1F5F9",
                   }}
                 >

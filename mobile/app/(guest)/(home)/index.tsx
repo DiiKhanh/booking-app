@@ -33,7 +33,7 @@ const POPULAR_DESTINATIONS = [
 ];
 
 const QUICK_CATEGORIES = [
-  { id: "1", icon: "flame-outline" as const, label: "Trending", color: "#FF5733" },
+  { id: "1", icon: "flame-outline" as const, label: "Trending", color: "#B8860B" },
   { id: "2", icon: "diamond-outline" as const, label: "Luxury", color: "#6366F1" },
   { id: "3", icon: "wallet-outline" as const, label: "Budget", color: "#10B981" },
   { id: "4", icon: "heart-outline" as const, label: "Romance", color: "#EC4899" },
@@ -57,7 +57,7 @@ function SectionHeader({
       {actionLabel && (
         <TouchableOpacity onPress={onAction} style={styles.seeAllBtn} activeOpacity={0.7}>
           <Text style={styles.seeAllText}>{actionLabel}</Text>
-          <Ionicons name="chevron-forward" size={14} color="#FF5733" />
+          <Ionicons name="chevron-forward" size={14} color="#B8860B" />
         </TouchableOpacity>
       )}
     </View>
@@ -220,7 +220,7 @@ export default function HomeScreen() {
                 style={styles.searchCTAWrapper}
               >
                 <LinearGradient
-                  colors={["#FF5733", "#CC4327"]}
+                  colors={["#B8860B", "#9A7009"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.searchCTA}
@@ -289,7 +289,7 @@ export default function HomeScreen() {
         <Animated.View entering={FadeInDown.delay(500).duration(500)} style={styles.dealsBannerWrapper}>
           <TouchableOpacity activeOpacity={0.88}>
             <LinearGradient
-              colors={["#FF5733", "#CC4327"]}
+              colors={["#B8860B", "#9A7009"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.dealsBanner}
@@ -438,7 +438,7 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.nearbyIconBlock}>
-                <Ionicons name="map-outline" size={28} color="#FF5733" />
+                <Ionicons name="map-outline" size={28} color="#B8860B" />
               </View>
             </LinearGradient>
           </TouchableOpacity>
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   signInText: {
     fontSize: 12,
     fontFamily: "Inter-Medium",
-    color: "#FF5733",
+    color: "#B8860B",
   },
   notifBtn: {
     width: 40,
@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
   seeAllText: {
     fontSize: 13,
     fontFamily: "Inter-Medium",
-    color: "#FF5733",
+    color: "#B8860B",
   },
 
   // Destinations
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
   dealsBtnText: {
     fontSize: 13,
     fontFamily: "Inter-Medium",
-    color: "#FF5733",
+    color: "#B8860B",
   },
   dealsIconBlock: {
     width: 56,
@@ -875,7 +875,7 @@ const styles = StyleSheet.create({
   hotelPrice: {
     fontSize: 18,
     fontFamily: "DMSans-Bold",
-    color: "#FF5733",
+    color: "#B8860B",
   },
   hotelPerNight: {
     fontSize: 12,
@@ -891,7 +891,7 @@ const styles = StyleSheet.create({
   viewBtnText: {
     fontSize: 13,
     fontFamily: "Inter-Medium",
-    color: "#FF5733",
+    color: "#B8860B",
   },
 
   // Explore nearby

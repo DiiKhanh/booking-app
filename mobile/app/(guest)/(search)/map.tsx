@@ -110,7 +110,7 @@ function PriceMarker({
       <View
         className="rounded-full px-3 py-1.5 items-center justify-center"
         style={{
-          backgroundColor: selected ? "#FF5733" : "#1A3A6B",
+          backgroundColor: selected ? "#B8860B" : "#1A3A6B",
           shadowColor: "#000",
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.25,
@@ -182,7 +182,7 @@ function HotelPreviewCard({
           </View>
           <Text
             className="mt-2 text-base"
-            style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}
+            style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}
           >
             {formatCurrency(hotel.priceRange.min, hotel.priceRange.currency)}
             <Text
@@ -217,7 +217,7 @@ function HotelPreviewCard({
         <TouchableOpacity
           onPress={onView}
           className="flex-1 items-center justify-center rounded-xl py-2.5"
-          style={{ backgroundColor: "#FF5733" }}
+          style={{ backgroundColor: "#B8860B" }}
         >
           <Text
             className="text-sm text-white"

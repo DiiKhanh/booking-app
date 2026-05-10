@@ -49,7 +49,7 @@ export function LocationPicker({ coordinate, onCoordinateChange }: LocationPicke
           coordinate={displayCoord}
           draggable
           onDragEnd={handleDragEnd}
-          pinColor="#FF5733"
+          pinColor="#B8860B"
         />
       </MapView>
 

@@ -186,7 +186,7 @@ export default function NotificationsScreen() {
             onPress={markAllAsRead}
             activeOpacity={0.7}
           >
-            <Ionicons name="checkmark-done-outline" size={16} color="#FF5733" />
+            <Ionicons name="checkmark-done-outline" size={16} color="#B8860B" />
             <Text style={styles.markAllText}>Mark all read</Text>
           </TouchableOpacity>
         ) : null}
@@ -207,7 +207,7 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor="#FF5733"
+              tintColor="#B8860B"
             />
           }
           renderItem={({ item, index }) => (
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
   },
   markAllText: {
     fontSize: 12,
-    color: "#FF5733",
+    color: "#B8860B",
     fontFamily: "Inter-Medium",
   },
   listContent: {
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#FF5733",
+    backgroundColor: "#B8860B",
     marginTop: 4,
     flexShrink: 0,
   },

@@ -48,7 +48,7 @@ export function ConflictRetryModal({
               className="h-20 w-20 items-center justify-center rounded-full"
               style={{ backgroundColor: "#FFF0EC" }}
             >
-              <Ionicons name="alert-circle" size={44} color="#FF5733" />
+              <Ionicons name="alert-circle" size={44} color="#B8860B" />
             </View>
           </View>
 
@@ -80,7 +80,7 @@ export function ConflictRetryModal({
             >
               <View
                 className="h-11 w-11 items-center justify-center rounded-xl"
-                style={{ backgroundColor: "#FF5733" }}
+                style={{ backgroundColor: "#B8860B" }}
               >
                 {retrying ? (
                   <Ionicons name="reload" size={20} color="#fff" />
@@ -102,7 +102,7 @@ export function ConflictRetryModal({
                   {retrying ? "Checking availability..." : "Attempt to book this room again"}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="#FF5733" />
+              <Ionicons name="chevron-forward" size={16} color="#B8860B" />
             </TouchableOpacity>
 
             {/* View Alternatives */}

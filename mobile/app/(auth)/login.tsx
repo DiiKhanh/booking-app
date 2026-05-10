@@ -295,11 +295,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#FF5733",
+    backgroundColor: "#B8860B",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
-    shadowColor: "#FF5733",
+    shadowColor: "#B8860B",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.45,
     shadowRadius: 10,
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 13,
-    color: "#FF5733",
+    color: "#B8860B",
     fontFamily: "Inter-Medium",
   },
   trustRow: {

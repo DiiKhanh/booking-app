@@ -68,7 +68,7 @@ export default function WelcomeScreen() {
               className="h-20 w-20 items-center justify-center rounded-[24px]"
               style={{ backgroundColor: "rgba(255, 255, 255, 0.12)" }}
             >
-              <Ionicons name="bed-outline" size={40} color="#FF5733" />
+              <Ionicons name="bed-outline" size={40} color="#B8860B" />
             </View>
           </View>
 
@@ -78,7 +78,7 @@ export default function WelcomeScreen() {
             style={{ fontFamily: "PlusJakartaSans-Bold", lineHeight: 48 }}
           >
             Welcome to{"\n"}
-            <Text style={{ color: "#FF5733" }}>StayEase</Text>
+            <Text style={{ color: "#B8860B" }}>StayEase</Text>
           </Text>
 
           <Text
@@ -102,7 +102,7 @@ export default function WelcomeScreen() {
             {
               icon: "globe-outline" as const,
               label: "10,000+ Hotels Worldwide",
-              color: "#FF5733",
+              color: "#B8860B",
             },
             {
               icon: "star-outline" as const,
@@ -144,7 +144,7 @@ export default function WelcomeScreen() {
           {/* Sign In Button */}
           <TouchableOpacity onPress={handleSignIn} activeOpacity={0.85}>
             <LinearGradient
-              colors={["#FF5733", "#E64D2D"]}
+              colors={["#B8860B", "#9A7009"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               className="h-14 items-center justify-center rounded-2xl"

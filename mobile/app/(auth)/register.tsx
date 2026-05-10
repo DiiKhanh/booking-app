@@ -188,7 +188,7 @@ export default function RegisterScreen() {
                         <Ionicons
                           name={opt.icon}
                           size={20}
-                          color={active ? "#FF5733" : "#94A3B8"}
+                          color={active ? "#B8860B" : "#94A3B8"}
                         />
                       </View>
                       <Text
@@ -205,7 +205,7 @@ export default function RegisterScreen() {
                           <Ionicons
                             name="checkmark-circle"
                             size={16}
-                            color="#FF5733"
+                            color="#B8860B"
                           />
                         </View>
                       )}
@@ -356,11 +356,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#FF5733",
+    backgroundColor: "#B8860B",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
-    shadowColor: "#FF5733",
+    shadowColor: "#B8860B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepDotActive: {
-    backgroundColor: "#FF5733",
+    backgroundColor: "#B8860B",
   },
   stepDotText: {
     fontSize: 11,
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   roleCardActive: {
-    borderColor: "#FF5733",
+    borderColor: "#B8860B",
     backgroundColor: "#FFF5F2",
   },
   roleIconWrap: {
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   termsLink: {
-    color: "#FF5733",
+    color: "#B8860B",
     fontFamily: "Inter-Medium",
   },
   signinRow: {

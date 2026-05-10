@@ -114,7 +114,7 @@ export default function AdminOverviewScreen() {
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32 }}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FF5733" />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#B8860B" />
       }
     >
       {/* Header */}
@@ -180,7 +180,7 @@ export default function AdminOverviewScreen() {
               Pending Approvals
             </Text>
             <TouchableOpacity onPress={() => router.push("/(admin)/(hotels)/")}>
-              <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#FF5733" }}>
+              <Text className="text-sm" style={{ fontFamily: "Inter-Medium", color: "#B8860B" }}>
                 View All
               </Text>
             </TouchableOpacity>

@@ -217,7 +217,7 @@ export default function BookingsListScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5733" />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#B8860B" />
           }
           renderItem={({ item, index }) => (
             <BookingCard
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   },
   cardPrice: {
     fontSize: 15,
-    color: "#FF5733",
+    color: "#B8860B",
     fontFamily: "DMSans-Bold",
   },
   emptyContainer: {
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   exploreBtn: {
-    backgroundColor: "#FF5733",
+    backgroundColor: "#B8860B",
     borderRadius: 12,
     paddingHorizontal: 24,
     paddingVertical: 12,

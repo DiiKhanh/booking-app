@@ -19,7 +19,7 @@ function BarChart({ data }: { data: { label: string; value: number; max: number 
               className="w-full rounded-t-lg"
               style={{
                 height: `${Math.max(heightPct, 4)}%`,
-                backgroundColor: idx === data.length - 1 ? "#FF5733" : "#1A3A6B",
+                backgroundColor: idx === data.length - 1 ? "#B8860B" : "#1A3A6B",
                 opacity: idx === data.length - 1 ? 1 : 0.4 + (idx / data.length) * 0.4,
               }}
             />

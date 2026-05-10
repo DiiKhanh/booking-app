@@ -89,7 +89,7 @@ export function HotelCard({
               </View>
               <Text
                 className="text-base"
-                style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}
+                style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}
               >
                 {formatCurrency(hotel.priceRange.min, hotel.priceRange.currency)}
                 <Text
@@ -173,7 +173,7 @@ export function HotelCard({
               <View className="flex-row items-baseline">
                 <Text
                   className="text-lg"
-                  style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}
+                  style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}
                 >
                   {formatCurrency(hotel.priceRange.min, hotel.priceRange.currency)}
                 </Text>

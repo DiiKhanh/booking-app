@@ -210,7 +210,7 @@ function FilterSheet({
           <TouchableOpacity onPress={onReset}>
             <Text
               className="text-sm"
-              style={{ fontFamily: "Inter-Medium", color: "#FF5733" }}
+              style={{ fontFamily: "Inter-Medium", color: "#B8860B" }}
             >
               Reset All
             </Text>
@@ -233,7 +233,7 @@ function FilterSheet({
                   onPress={() => setSortBy(opt.value)}
                   className="rounded-full border px-4 py-2"
                   style={{
-                    borderColor: sortBy === opt.value ? "#FF5733" : "#E2E8F0",
+                    borderColor: sortBy === opt.value ? "#B8860B" : "#E2E8F0",
                     backgroundColor: sortBy === opt.value ? "#FFF0EC" : "#fff",
                   }}
                 >
@@ -241,7 +241,7 @@ function FilterSheet({
                     className="text-sm"
                     style={{
                       fontFamily: "Inter-Medium",
-                      color: sortBy === opt.value ? "#FF5733" : "#64748B",
+                      color: sortBy === opt.value ? "#B8860B" : "#64748B",
                     }}
                   >
                     {opt.label}
@@ -266,7 +266,7 @@ function FilterSheet({
                   onPress={() => setLocalPricePreset(i)}
                   className="rounded-full border px-4 py-2"
                   style={{
-                    borderColor: localPricePreset === i ? "#FF5733" : "#E2E8F0",
+                    borderColor: localPricePreset === i ? "#B8860B" : "#E2E8F0",
                     backgroundColor: localPricePreset === i ? "#FFF0EC" : "#fff",
                   }}
                 >
@@ -274,7 +274,7 @@ function FilterSheet({
                     className="text-sm"
                     style={{
                       fontFamily: "Inter-Medium",
-                      color: localPricePreset === i ? "#FF5733" : "#64748B",
+                      color: localPricePreset === i ? "#B8860B" : "#64748B",
                     }}
                   >
                     {p.label}
@@ -444,12 +444,12 @@ export default function SearchScreen() {
             <Ionicons
               name="options-outline"
               size={20}
-              color={activeFilterCount > 0 ? "#FF5733" : "#64748B"}
+              color={activeFilterCount > 0 ? "#B8860B" : "#64748B"}
             />
             {activeFilterCount > 0 && (
               <View
                 className="absolute -right-1 -top-1 h-4 w-4 items-center justify-center rounded-full"
-                style={{ backgroundColor: "#FF5733" }}
+                style={{ backgroundColor: "#B8860B" }}
               >
                 <Text className="text-[10px] text-white" style={{ fontFamily: "Inter-Medium" }}>
                   {activeFilterCount}
@@ -585,7 +585,7 @@ export default function SearchScreen() {
                 )}
               </Text>
               {(isLoading || isFetching) && (
-                <ActivityIndicator size="small" color="#FF5733" />
+                <ActivityIndicator size="small" color="#B8860B" />
               )}
             </View>
           }
@@ -613,7 +613,7 @@ export default function SearchScreen() {
                 >
                   <Text
                     className="text-sm"
-                    style={{ fontFamily: "Inter-Medium", color: "#FF5733" }}
+                    style={{ fontFamily: "Inter-Medium", color: "#B8860B" }}
                   >
                     Clear Filters
                   </Text>

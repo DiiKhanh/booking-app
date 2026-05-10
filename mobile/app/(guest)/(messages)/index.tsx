@@ -66,7 +66,7 @@ export default function GuestMessagesScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#FF5733"
+            tintColor="#B8860B"
           />
         }
         renderItem={({ item }) => (

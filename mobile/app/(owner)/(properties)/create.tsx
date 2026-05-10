@@ -357,7 +357,7 @@ export default function CreatePropertyScreen() {
           onPress={handleSubmit}
           disabled={isSubmitting}
           className="rounded-2xl items-center justify-center py-4"
-          style={{ backgroundColor: isSubmitting ? "#94A3B8" : "#FF5733" }}
+          style={{ backgroundColor: isSubmitting ? "#94A3B8" : "#B8860B" }}
           activeOpacity={0.8}
         >
           {isSubmitting ? (

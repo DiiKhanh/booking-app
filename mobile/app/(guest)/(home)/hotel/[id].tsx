@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
   },
   roomPrice: {
     fontSize: 17,
-    color: "#FF5733",
+    color: "#B8860B",
     fontFamily: "DMSans-Bold",
   },
   roomPerNight: {
@@ -648,11 +648,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#FF5733",
+    backgroundColor: "#B8860B",
     borderRadius: 14,
     paddingHorizontal: 24,
     paddingVertical: 14,
-    shadowColor: "#FF5733",
+    shadowColor: "#B8860B",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -677,7 +677,7 @@ const styles = StyleSheet.create({
   },
   errorLink: {
     fontSize: 14,
-    color: "#FF5733",
+    color: "#B8860B",
     fontFamily: "Inter-Medium",
   },
 });

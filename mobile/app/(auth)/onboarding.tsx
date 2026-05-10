@@ -43,7 +43,7 @@ const SLIDES: OnboardingSlide[] = [
     id: "1",
     icon: "search-outline",
     iconBg: "rgba(255, 87, 51, 0.15)",
-    iconColor: "#FF5733",
+    iconColor: "#B8860B",
     title: "Discover",
     highlight: "Perfect Stays",
     description:
@@ -104,7 +104,7 @@ function DotIndicator({
 
     const backgroundColor = interpolateColor(scrollX.value, inputRange, [
       "rgba(255,255,255,0.3)",
-      "#FF5733",
+      "#B8860B",
       "rgba(255,255,255,0.3)",
     ]);
 
@@ -186,7 +186,7 @@ function SlideItem({
             style={{ fontFamily: "PlusJakartaSans-Bold", lineHeight: 40 }}
           >
             {item.title}{" "}
-            <Text style={{ color: "#FF5733" }}>{item.highlight}</Text>
+            <Text style={{ color: "#B8860B" }}>{item.highlight}</Text>
           </Text>
         </View>
 
@@ -337,7 +337,7 @@ export default function OnboardingScreen() {
           activeOpacity={0.8}
         >
           <LinearGradient
-            colors={["#FF5733", "#E64D2D"]}
+            colors={["#B8860B", "#9A7009"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             className="h-14 flex-row items-center justify-center rounded-2xl px-8"

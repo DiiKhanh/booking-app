@@ -69,7 +69,7 @@ function PropertyCard({ hotel, index }: { hotel: Hotel; index: number }) {
                 {hotel.rating?.toFixed(1) ?? "—"} ({hotel.reviewCount ?? 0})
               </Text>
             </View>
-            <Text className="text-base" style={{ fontFamily: "DMSans-Bold", color: "#FF5733" }}>
+            <Text className="text-base" style={{ fontFamily: "DMSans-Bold", color: "#B8860B" }}>
               {formatCurrency(hotel.priceRange?.min ?? 0, hotel.priceRange?.currency ?? "USD")}
               <Text className="text-xs" style={{ fontFamily: "Inter-Regular", color: "#94A3B8" }}>
                 {" "}/night
@@ -118,7 +118,7 @@ export default function PropertiesScreen() {
         contentContainerStyle={{ paddingTop: 20, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5733" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#B8860B" />
         }
         ListEmptyComponent={
           !isLoading ? (

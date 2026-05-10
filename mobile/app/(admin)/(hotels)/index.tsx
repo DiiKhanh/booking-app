@@ -146,7 +146,7 @@ export default function AdminHotelsScreen() {
         contentContainerStyle={{ paddingTop: 20, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF5733" />
+          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#B8860B" />
         }
         ListEmptyComponent={
           !isLoading ? (
