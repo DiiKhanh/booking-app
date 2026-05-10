@@ -1,0 +1,59 @@
+groups:
+  - name: stayease.api
+    interval: 30s
+    rules:
+      - alert: APIHighErrorRate
+        expr: |
+          100 * sum(rate(http_requests_total{status=~"5.."}[5m]))
+              / sum(rate(http_requests_total[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API error rate > 5% (current: {{ $value | printf \"%.1f\" }}%)"
+          description: "5xx responses exceed 5% of total traffic over the last 5 minutes."
+
+      - alert: APIHighLatencyP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path)
+          ) > 2
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency > 2s on {{ $labels.path }}"
+          description: "The 99th percentile response time has exceeded 2 seconds."
+
+      - alert: APIDown
+        expr: up{job="stayease-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "StayEase API is down"
+          description: "Prometheus cannot scrape the API. The service may be unreachable."
+
+  - name: stayease.bookings
+    rules:
+      - alert: HighBookingConflictRate
+        expr: |
+          100 * rate(booking_conflicts_total[10m])
+              / (rate(bookings_created_total[10m]) + rate(booking_conflicts_total[10m])) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Booking conflict rate > 20% (current: {{ $value | printf \"%.1f\" }}%)"
+          description: "High lock contention — more than 1 in 5 booking attempts is conflicting."
+
+  - name: stayease.infrastructure
+    rules:
+      - alert: HighActiveConnections
+        expr: http_active_connections > 200
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Active connections > 200 (current: {{ $value }})"
+          description: "The API has more than 200 concurrent in-flight requests."

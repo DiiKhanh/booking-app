@@ -82,13 +82,26 @@ Always check `docs/tasks/PLAN-*.md` before modifying code to align with the acti
 
 ## Commands
 
+### DevOps (Monitoring stack)
+
+```bash
+cd devops
+
+docker compose up -d       # Start full stack (infra + Prometheus + Grafana + Loki + Jaeger)
+docker compose down        # Stop everything
+docker compose logs -f     # Follow logs for all services
+```
+
+> Use `devops/docker-compose.yml` when you need observability (Grafana dashboards, log search, traces).
+> Use `backend/docker-compose.yml` (via `make infra-up`) for lightweight dev without monitoring overhead.
+
 ### Backend (Go)
 
 ```bash
 cd backend
 
-# Infrastructure
-make infra-up        # Start Postgres + Redis + Adminer + Redis Commander
+# Infrastructure (dev-only, no monitoring)
+make infra-up        # Start Postgres + Redis + Elasticsearch + RabbitMQ + UI tools
 make infra-down      # Stop all infra
 
 # Database
@@ -97,7 +110,7 @@ make migrate         # Run migrations
 make reset-db        # Full DB reset
 
 # Development
-make server          # Start API server (reads .env)
+make server          # Start API server (reads .env) — exposes :8080/metrics for Prometheus
 make tidy            # go mod tidy
 
 # Testing
@@ -201,9 +214,16 @@ Pass `context.Context` to all DB/Redis calls. Use `sync.RWMutex` or `sync.Map` f
 
 ## Infrastructure (Local)
 
-`backend/docker-compose.yml` starts:
-- PostgreSQL 16 on `:5432` (adminer at `:8081`)
-- Redis 7 on `:6379` (redis-commander at `:8082`)
+**Dev infra only** — `backend/docker-compose.yml` via `make infra-up`:
+- PostgreSQL 16 `:5432` (Adminer `:8081`)
+- Redis 7 `:6379` (Redis Commander `:8082`)
+- Elasticsearch 8 `:9200`
+- RabbitMQ 3.13 `:5672` (Management `:15672`)
+
+**Full stack with monitoring** — `devops/docker-compose.yml`:
+- All of the above, plus Prometheus `:9090`, Grafana `:3000` (admin/admin), Loki `:3100`, Jaeger `:16686`, Alertmanager `:9093`
+- Grafana auto-provisions 4 dashboards: API Overview, Business Metrics, Logs Explorer, Go Runtime
+- Promtail ships container logs → Loki; Prometheus scrapes `host.docker.internal:8080/metrics`
 
 Backend config via environment variables — copy `backend/.env.example` to `backend/.env`.
 

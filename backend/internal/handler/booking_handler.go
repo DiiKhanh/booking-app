@@ -4,6 +4,7 @@ import (
 	"booking-app/internal/domain"
 	"booking-app/internal/dto/request"
 	"booking-app/internal/dto/response"
+	"booking-app/internal/observability"
 	"context"
 	"errors"
 	"net/http"
@@ -67,6 +68,7 @@ func (h *BookingHandler) CreateBooking(c *gin.Context) {
 		return
 	}
 
+	observability.BookingsCreatedTotal.Inc()
 	c.JSON(http.StatusCreated, response.OK(response.NewBookingResponse(booking)))
 }
 
@@ -99,6 +101,7 @@ func (h *BookingHandler) CreateBookingLegacy(c *gin.Context) {
 		return
 	}
 
+	observability.BookingsCreatedTotal.Inc()
 	c.JSON(http.StatusCreated, response.OK(response.NewBookingResponse(booking)))
 }
 
@@ -229,11 +232,8 @@ func handleBookingError(c *gin.Context, err error) {
 		c.JSON(http.StatusForbidden, response.Fail(err.Error()))
 	case errors.Is(err, domain.ErrUnauthorized):
 		c.JSON(http.StatusForbidden, response.Fail(err.Error()))
-	case errors.Is(err, domain.ErrConflict):
-		c.JSON(http.StatusConflict, response.Fail(err.Error()))
-	case errors.Is(err, domain.ErrNotAvailable):
-		c.JSON(http.StatusConflict, response.Fail(err.Error()))
-	case errors.Is(err, domain.ErrLockFailed):
+	case errors.Is(err, domain.ErrConflict), errors.Is(err, domain.ErrNotAvailable), errors.Is(err, domain.ErrLockFailed):
+		observability.BookingConflictsTotal.Inc()
 		c.JSON(http.StatusConflict, response.Fail(err.Error()))
 	case errors.Is(err, domain.ErrBadRequest):
 		c.JSON(http.StatusBadRequest, response.Fail(err.Error()))

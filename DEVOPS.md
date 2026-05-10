@@ -9,14 +9,42 @@
 | Thành phần | Trạng thái | Chi tiết |
 |---|---|---|
 | Docker | ✅ Có sẵn | `backend/Dockerfile.api`, `Dockerfile.worker`, `web/Dockerfile` — multi-stage, distroless |
-| Docker Compose | ✅ Có sẵn | `backend/docker-compose.yml` (dev), `docker-compose.prod.yml` (prod) |
+| Docker Compose | ✅ Có sẵn | `backend/docker-compose.yml` (dev infra), `devops/docker-compose.yml` (full stack + monitoring) |
 | GitHub Actions | ✅ Có sẵn | `.github/workflows/backend.yml`, `web.yml`, `mobile.yml` — test + build + push GHCR |
-| Prometheus | ✅ Partial | `prometheus/client_golang` trong go.mod, config cơ bản |
-| OpenTelemetry | ✅ Partial | `internal/observability/`, Jaeger trong compose — chưa instrument đầy đủ |
-| Kubernetes | ❌ Chưa có | Cần tạo toàn bộ manifests |
-| Argo CD | ❌ Chưa có | Cần setup GitOps pipeline |
-| Terraform | ❌ Chưa có | Cần viết IaC cho cloud infra |
-| Helm Charts | ❌ Chưa có | Cần tạo chart cho StayEase |
+| Prometheus | ✅ Complete | `devops/prometheus/` — scrape config + 5 alert rules, metrics wired vào booking handler |
+| Grafana | ✅ Complete | `devops/grafana/` — 4 dashboards (API, Business, Logs, Go Runtime), 3 datasources tự động provision |
+| Loki + Promtail | ✅ Complete | `devops/loki/` + `devops/promtail/` — thu thập logs từ tất cả Docker containers |
+| Jaeger | ✅ Partial | Chạy và nhận traces, nhưng backend chưa tạo custom spans trong handlers/services |
+| Alertmanager | ✅ Complete | `devops/alertmanager/` — routing config, cần điền webhook (Slack/email) |
+| OpenTelemetry | ✅ Partial | `internal/observability/tracer.go` — tracer factory setup, chưa instrument handlers |
+| Kubernetes | ❌ Chưa có | Phase 4 — cần tạo toàn bộ manifests |
+| Argo CD | ❌ Chưa có | Phase 5 — cần setup GitOps pipeline |
+| Terraform | ❌ Chưa có | Phase 3 — cần viết IaC cho cloud infra |
+| Helm Charts | ❌ Chưa có | Phase 4 — cần tạo chart cho StayEase |
+
+### Cách chạy monitoring stack
+
+```bash
+# Khởi động toàn bộ stack (infra + monitoring)
+cd devops && docker compose up -d
+
+# Chạy backend API (Prometheus tự scrape :8080/metrics)
+cd backend && make server
+
+# Truy cập
+# Grafana:     http://localhost:3000  (admin/admin)
+# Prometheus:  http://localhost:9090
+# Jaeger UI:   http://localhost:16686
+# Alertmanager: http://localhost:9093
+```
+
+### Phân chia trách nhiệm
+
+| Thư mục | Chạy cái gì | Ghi chú |
+|---|---|---|
+| `backend/` | Go API server (`make server`) | Port `:8080`, đọc `.env` |
+| `backend/docker-compose.yml` | Dev infra: Postgres, Redis, Elasticsearch, RabbitMQ | `make infra-up` — không có monitoring |
+| `devops/docker-compose.yml` | Full stack: infra + Prometheus + Grafana + Loki + Jaeger + Alertmanager | Dùng khi cần observe hệ thống |
 
 ---
 
