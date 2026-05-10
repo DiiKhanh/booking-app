@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +16,6 @@ import { authService } from "@/services/auth.service";
 export default function RegisterPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [form, setForm] = useState({
     full_name: "",
@@ -35,7 +35,22 @@ export default function RegisterPage() {
     return e;
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const registerMutation = useMutation({
+    mutationFn: () =>
+      authService.register({
+        full_name: form.full_name,
+        email: form.email,
+        password: form.password,
+        phone: form.phone || undefined,
+      }),
+    onSuccess: () => setSuccess(true),
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Registration failed";
+      toast.error(msg);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) {
@@ -43,20 +58,7 @@ export default function RegisterPage() {
       return;
     }
     setErrors({});
-    setIsLoading(true);
-    try {
-      await authService.register({
-        full_name: form.full_name,
-        email: form.email,
-        password: form.password,
-        phone: form.phone || undefined,
-      });
-      setSuccess(true);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Registration failed";
-      toast.error(msg);
-      setIsLoading(false);
-    }
+    registerMutation.mutate();
   };
 
   if (success) {
@@ -228,10 +230,10 @@ export default function RegisterPage() {
 
               <Button
                 type="submit"
-                className={cn("w-full h-10 gap-2 cursor-pointer transition-all duration-200", isLoading && "opacity-90")}
-                disabled={isLoading}
+                className={cn("w-full h-10 gap-2 cursor-pointer transition-all duration-200", registerMutation.isPending && "opacity-90")}
+                disabled={registerMutation.isPending}
               >
-                {isLoading ? (
+                {registerMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin" />Creating account…</>
                 ) : (
                   <>Create account<ArrowRight className="h-4 w-4" /></>

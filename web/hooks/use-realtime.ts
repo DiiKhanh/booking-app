@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth.store";
 import { useChatStore } from "@/stores/chat.store";
 import { apiClient } from "@/services/api";
-import type { Message } from "@/types/chat.types";
+import type { Conversation, Message } from "@/types/chat.types";
 
 const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8080/api/v1/ws/bookings";
@@ -37,14 +38,18 @@ interface TicketResponse {
 
 export function useRealtimeConnection() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const prependMessage = useChatStore((s) => s.prependMessage);
-  const updateLastMessage = useChatStore((s) => s.updateLastMessage);
   const setTyping = useChatStore((s) => s.setTyping);
+  const queryClient = useQueryClient();
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef(MIN_BACKOFF);
   const mountedRef = useRef(true);
+  // Incremented on every cleanup — any in-flight connect() that captures an
+  // older generation aborts after its async ticket fetch resolves. This prevents
+  // React StrictMode's mount→unmount→remount cycle from producing two live
+  // WebSocket connections that both handle the same incoming messages.
+  const genRef = useRef(0);
   // connectRef allows the reconnect callback to call the latest connect version
   // without triggering the react-hooks/immutability ESLint rule.
   const connectRef = useRef<(() => Promise<void>) | null>(null);
@@ -52,13 +57,19 @@ export function useRealtimeConnection() {
   const connect = useCallback(async () => {
     if (!mountedRef.current || !isAuthenticated) return;
 
+    // Capture generation at the start of this connect attempt.
+    const myGen = genRef.current;
+
     // Fetch a one-time ticket from the server (avoids JWT in WS URL).
     let ticket: string;
     try {
       const res = await apiClient.post<TicketResponse>("/ws/ticket");
+      // Bail if cleanup ran (and incremented genRef) while we were awaiting.
+      if (genRef.current !== myGen) return;
       ticket = res.data?.data?.ticket;
       if (!ticket) return;
     } catch {
+      if (genRef.current !== myGen) return;
       // Schedule retry on ticket fetch failure.
       reconnectTimer.current = setTimeout(() => {
         if (mountedRef.current && isAuthenticated) void connectRef.current?.();
@@ -93,8 +104,27 @@ export function useRealtimeConnection() {
             readAt: p.read_at,
             createdAt: p.created_at,
           };
-          prependMessage(p.conversation_id, msg);
-          updateLastMessage(p.conversation_id, msg);
+
+          // Prepend to messages cache — skip if the message is already present
+          // (guards against WS echo duplicating a message added by sendMutation).
+          queryClient.setQueryData<Message[]>(
+            ["chat", "messages", p.conversation_id],
+            (prev) => {
+              if (prev?.some((m) => m.id === p.id)) return prev;
+              return [msg, ...(prev ?? [])];
+            },
+          );
+
+          // Update the last message preview in the conversations list cache.
+          queryClient.setQueryData<Conversation[]>(
+            ["chat", "conversations"],
+            (prev) =>
+              prev?.map((c) =>
+                c.id === p.conversation_id
+                  ? { ...c, lastMessage: msg, lastMessageAt: msg.createdAt }
+                  : c,
+              ),
+          );
           break;
         }
         case "chat.typing": {
@@ -120,7 +150,7 @@ export function useRealtimeConnection() {
     ws.onerror = () => {
       ws.close();
     };
-  }, [isAuthenticated, prependMessage, updateLastMessage, setTyping]);
+  }, [isAuthenticated, queryClient, setTyping]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -130,6 +160,8 @@ export function useRealtimeConnection() {
 
     return () => {
       mountedRef.current = false;
+      // Invalidate any in-flight connect() that is awaiting its ticket fetch.
+      genRef.current++;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       wsRef.current?.close();
     };

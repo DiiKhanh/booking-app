@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,41 +25,39 @@ export default function LoginPage() {
   const router = useRouter();
   const { setUser } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
     email: "",
     password: "",
     remember: false,
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.email || !form.password) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const { user } = await authService.login({
-        email: form.email,
-        password: form.password,
-      });
+  const loginMutation = useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      authService.login({ email, password }),
+    onSuccess: ({ user }) => {
       setUser(user);
       if (user.role === "guest") {
         toast.error(
           "This portal is for hotel owners and admins. Use the mobile app to book hotels.",
         );
-        setIsLoading(false);
         return;
       }
       toast.success(`Welcome back, ${user.name}!`);
       redirectByRole(user.role, router);
-    } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : "Invalid email or password";
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Invalid email or password";
       toast.error(msg);
-      setIsLoading(false);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.email || !form.password) {
+      toast.error("Please fill in all fields");
+      return;
     }
+    loginMutation.mutate({ email: form.email, password: form.password });
   };
 
   return (
@@ -257,11 +256,11 @@ export default function LoginPage() {
                 type="submit"
                 className={cn(
                   "w-full h-10 gap-2 cursor-pointer transition-all duration-200",
-                  isLoading && "opacity-90",
+                  loginMutation.isPending && "opacity-90",
                 )}
-                disabled={isLoading}
+                disabled={loginMutation.isPending}
               >
-                {isLoading ? (
+                {loginMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Signing in…
