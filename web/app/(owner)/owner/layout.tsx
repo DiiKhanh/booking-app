@@ -19,7 +19,7 @@ export default function OwnerLayout({
     <SidebarProvider defaultOpen={true}>
       <AppSidebar navItems={ownerNav} role="owner" user={mockUser} />
       <SidebarInset className="flex flex-col min-h-screen">
-        <Header title="Dashboard" />
+        <Header />
         <main className="flex-1 p-6 page-enter">{children}</main>
       </SidebarInset>
     </SidebarProvider>

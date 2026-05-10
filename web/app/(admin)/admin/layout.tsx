@@ -19,7 +19,7 @@ export default function AdminLayout({
     <SidebarProvider defaultOpen={true}>
       <AppSidebar navItems={adminNav} role="admin" user={mockUser} />
       <SidebarInset className="flex flex-col min-h-screen">
-        <Header title="Admin Dashboard" />
+        <Header />
         <main className="flex-1 p-6 page-enter">{children}</main>
       </SidebarInset>
     </SidebarProvider>

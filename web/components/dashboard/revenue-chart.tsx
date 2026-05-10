@@ -121,13 +121,13 @@ export function RevenueChart() {
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
               yAxisId="revenue"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
@@ -135,7 +135,7 @@ export function RevenueChart() {
             <YAxis
               yAxisId="bookings"
               orientation="right"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               axisLine={false}
               tickLine={false}
             />
@@ -143,8 +143,10 @@ export function RevenueChart() {
             <Bar
               yAxisId="bookings"
               dataKey="bookings"
-              fill="hsl(var(--chart-1) / 0.15)"
-              stroke="hsl(var(--chart-1) / 0.3)"
+              fill="var(--chart-1)"
+              fillOpacity={0.15}
+              stroke="var(--chart-1)"
+              strokeOpacity={0.3}
               radius={[4, 4, 0, 0]}
               maxBarSize={32}
             />
@@ -152,10 +154,10 @@ export function RevenueChart() {
               yAxisId="revenue"
               type="monotone"
               dataKey="revenue"
-              stroke="hsl(var(--chart-1))"
+              stroke="var(--chart-1)"
               strokeWidth={2.5}
-              dot={{ fill: "hsl(var(--chart-1))", r: 3, strokeWidth: 0 }}
-              activeDot={{ r: 5, fill: "hsl(var(--chart-1))" }}
+              dot={{ fill: "var(--chart-1)", r: 3, strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: "var(--chart-1)" }}
             />
           </ComposedChart>
         </ResponsiveContainer>

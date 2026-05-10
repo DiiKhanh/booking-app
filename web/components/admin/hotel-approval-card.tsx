@@ -28,7 +28,7 @@ export function HotelApprovalCard({
         <div className="flex gap-0">
           {/* Photo */}
           <div className="w-48 shrink-0 bg-muted flex items-center justify-center">
-            {hotel.photos[0] ? (
+            {hotel.photos?.[0] ? (
               <img
                 src={hotel.photos[0]}
                 alt={hotel.name}
@@ -67,16 +67,16 @@ export function HotelApprovalCard({
                   Submitted {new Date(hotel.createdAt).toLocaleDateString()}
                 </div>
 
-                {hotel.amenities.length > 0 && (
+                {(hotel.amenities?.length ?? 0) > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {hotel.amenities.slice(0, 4).map((a) => (
+                    {hotel.amenities?.slice(0, 4).map((a) => (
                       <Badge key={a} variant="secondary" className="text-xs">
                         {a}
                       </Badge>
                     ))}
-                    {hotel.amenities.length > 4 && (
+                    {(hotel.amenities?.length ?? 0) > 4 && (
                       <Badge variant="outline" className="text-xs">
-                        +{hotel.amenities.length - 4}
+                        +{(hotel.amenities?.length ?? 0) - 4}
                       </Badge>
                     )}
                   </div>

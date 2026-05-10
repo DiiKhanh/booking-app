@@ -54,11 +54,11 @@ const GROWTH_DATA = [
 ];
 
 const GEO_DATA = [
-  { name: "Ho Chi Minh City", bookings: 3840, pct: 38, color: "hsl(var(--chart-1))" },
-  { name: "Hanoi", bookings: 2540, pct: 25, color: "hsl(var(--chart-2))" },
-  { name: "Da Nang", bookings: 1820, pct: 18, color: "hsl(var(--chart-3))" },
-  { name: "Nha Trang", bookings: 1020, pct: 10, color: "hsl(var(--chart-4))" },
-  { name: "Other", bookings: 920, pct: 9, color: "hsl(var(--chart-5))" },
+  { name: "Ho Chi Minh City", bookings: 3840, pct: 38, color: "var(--chart-1)" },
+  { name: "Hanoi", bookings: 2540, pct: 25, color: "var(--chart-2)" },
+  { name: "Da Nang", bookings: 1820, pct: 18, color: "var(--chart-3)" },
+  { name: "Nha Trang", bookings: 1020, pct: 10, color: "var(--chart-4)" },
+  { name: "Other", bookings: 920, pct: 9, color: "var(--chart-5)" },
 ];
 
 const CATEGORY_DATA = [
@@ -156,27 +156,30 @@ export default function AdminAnalyticsPage() {
             <AreaChart data={GROWTH_DATA}>
               <defs>
                 <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 12 }} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="month" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="left" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v/1000).toFixed(0)}K`} />
               <Tooltip
+                contentStyle={{ backgroundColor: "var(--popover)", borderColor: "var(--border)", borderRadius: "8px", fontSize: "12px" }}
+                labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
+                itemStyle={{ color: "var(--muted-foreground)" }}
                 formatter={(value, name) => {
                   if (name === "Revenue") return [`$${Number(value).toLocaleString()}`, name];
                   return [Number(value).toLocaleString(), name];
                 }}
               />
-              <Legend />
-              <Area yAxisId="left" type="monotone" dataKey="users" stroke="hsl(var(--chart-1))" fill="url(#colorUsers)" strokeWidth={2} name="Users" />
-              <Area yAxisId="right" type="monotone" dataKey="revenue" stroke="hsl(var(--chart-2))" fill="url(#colorRevenue)" strokeWidth={2} name="Revenue" />
+              <Legend wrapperStyle={{ fontSize: "12px" }} />
+              <Area yAxisId="left" type="monotone" dataKey="users" stroke="var(--chart-1)" fill="url(#colorUsers)" strokeWidth={2} name="Users" />
+              <Area yAxisId="right" type="monotone" dataKey="revenue" stroke="var(--chart-2)" fill="url(#colorRevenue)" strokeWidth={2} name="Revenue" />
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>
@@ -192,11 +195,15 @@ export default function AdminAnalyticsPage() {
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={GROWTH_DATA}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="bookings" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} name="Bookings" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "var(--popover)", borderColor: "var(--border)", borderRadius: "8px", fontSize: "12px" }}
+                  labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
+                  itemStyle={{ color: "var(--muted-foreground)" }}
+                />
+                <Bar dataKey="bookings" fill="var(--chart-3)" radius={[4, 4, 0, 0]} name="Bookings" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -287,11 +294,16 @@ export default function AdminAnalyticsPage() {
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={GROWTH_DATA.map((d, i) => ({ ...d, adr: 145 + i * 3 + Math.sin(i) * 8 }))}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
-                <Tooltip formatter={(v) => [`$${v}`, "ADR"]} />
-                <Line type="monotone" dataKey="adr" stroke="hsl(var(--chart-4))" strokeWidth={2.5} dot={false} name="ADR" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "var(--popover)", borderColor: "var(--border)", borderRadius: "8px", fontSize: "12px" }}
+                  labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
+                  itemStyle={{ color: "var(--muted-foreground)" }}
+                  formatter={(v) => [`$${v}`, "ADR"]}
+                />
+                <Line type="monotone" dataKey="adr" stroke="var(--chart-4)" strokeWidth={2.5} dot={false} name="ADR" />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>

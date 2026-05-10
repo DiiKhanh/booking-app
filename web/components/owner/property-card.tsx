@@ -36,7 +36,7 @@ export function PropertyCard({ hotel, view = "grid" }: PropertyCardProps) {
       <Card className="flex flex-row items-center gap-4 p-4 hover:shadow-md transition-shadow cursor-pointer group">
         {/* Thumbnail */}
         <div className="w-24 h-20 rounded-lg overflow-hidden shrink-0 bg-muted flex items-center justify-center">
-          {hotel.photos[0] ? (
+          {hotel?.photos?.[0] ? (
             <img
               src={hotel.photos[0]}
               alt={hotel.name}
@@ -103,7 +103,7 @@ export function PropertyCard({ hotel, view = "grid" }: PropertyCardProps) {
     <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 cursor-pointer group">
       {/* Photo */}
       <div className="relative h-44 bg-muted overflow-hidden">
-        {hotel.photos[0] ? (
+        {hotel?.photos?.[0] ? (
           <img
             src={hotel.photos[0]}
             alt={hotel.name}
@@ -161,7 +161,7 @@ export function PropertyCard({ hotel, view = "grid" }: PropertyCardProps) {
           <TrendingUp className="w-4 h-4 text-emerald-500" />
           <span className="text-muted-foreground">Revenue:</span>
           <span className="font-semibold text-foreground">
-            ${hotel.totalRevenue.toLocaleString()}
+            ${hotel?.totalRevenue?.toLocaleString()}
           </span>
         </div>
       </CardContent>

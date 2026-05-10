@@ -131,12 +131,12 @@
   --input: oklch(0.22 0.03 262);
   --ring: oklch(0.54 0.115 252);
 
-  /* Chart Colors — brighter for dark bg */
-  --chart-1: oklch(0.60 0.115 252);
-  --chart-2: oklch(0.65 0.12 165);
-  --chart-3: oklch(0.74 0.16 75);
-  --chart-4: oklch(0.68 0.22 27);
-  --chart-5: oklch(0.62 0.135 290);
+  /* Chart Colors — high-contrast for dark bg */
+  --chart-1: oklch(0.70 0.16 252);
+  --chart-2: oklch(0.72 0.14 165);
+  --chart-3: oklch(0.82 0.18 75);
+  --chart-4: oklch(0.74 0.22 27);
+  --chart-5: oklch(0.72 0.17 290);
 
   /* Sidebar */
   --sidebar: oklch(0.092 0.022 262);

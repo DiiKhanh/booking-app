@@ -79,12 +79,12 @@ export function BookingTable({
           <div className="flex items-center gap-2">
             <Avatar className="w-8 h-8">
               <AvatarFallback className="text-xs">
-                {guest.name.charAt(0).toUpperCase()}
+                {guest?.name?.charAt(0)?.toUpperCase() ?? "?"}
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-sm font-medium">{guest.name}</p>
-              <p className="text-xs text-muted-foreground">{guest.email}</p>
+              <p className="text-sm font-medium">{guest?.name ?? "—"}</p>
+              <p className="text-xs text-muted-foreground">{guest?.email ?? "—"}</p>
             </div>
           </div>
         );

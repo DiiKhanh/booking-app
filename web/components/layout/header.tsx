@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -15,6 +16,31 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { ownerNav, adminNav, type NavItem } from "@/lib/nav-config";
+
+function resolvePageTitle(pathname: string): string {
+  const flat: { href: string; title: string }[] = [];
+  function flatten(items: NavItem[]) {
+    for (const item of items) {
+      if (item.children?.length) flatten(item.children);
+      flat.push({ href: item.href, title: item.title });
+    }
+  }
+  flatten([...ownerNav, ...adminNav]);
+
+  const exact = flat.find((item) => item.href === pathname);
+  if (exact) return exact.title;
+
+  const prefixMatches = flat.filter((item) =>
+    pathname.startsWith(item.href + "/")
+  );
+  if (prefixMatches.length) {
+    return prefixMatches.reduce((a, b) =>
+      a.href.length > b.href.length ? a : b
+    ).title;
+  }
+  return "Dashboard";
+}
 
 interface HeaderProps {
   title?: string;
@@ -22,6 +48,9 @@ interface HeaderProps {
 }
 
 export function Header({ title, breadcrumb }: HeaderProps) {
+  const pathname = usePathname();
+  const pageTitle = title ?? resolvePageTitle(pathname);
+
   return (
     <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
       {/* Left: Sidebar trigger + breadcrumb */}
@@ -30,7 +59,7 @@ export function Header({ title, breadcrumb }: HeaderProps) {
         <Separator orientation="vertical" className="h-4" />
         {breadcrumb ?? (
           <span className="text-sm font-medium text-foreground truncate">
-            {title}
+            {pageTitle}
           </span>
         )}
       </div>

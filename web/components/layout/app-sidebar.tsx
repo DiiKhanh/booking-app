@@ -49,9 +49,9 @@ export function AppSidebar({ navItems, role, user }: AppSidebarProps) {
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      {/* Logo */}
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-3 px-2 py-3">
+      {/* Logo — h-14 matches the topbar height */}
+      <SidebarHeader className="border-b border-sidebar-border h-14 !p-0 justify-center">
+        <div className="flex items-center gap-3 px-3 h-full">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
             SE
           </div>

@@ -164,24 +164,32 @@ export default function AnalyticsPage() {
         <CardContent>
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={REVENUE_DATA[period]}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 12 }}
-                className="text-muted-foreground"
+                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                axisLine={false}
+                tickLine={false}
               />
               <YAxis
                 yAxisId="revenue"
                 orientation="left"
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                axisLine={false}
+                tickLine={false}
                 tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
               />
               <YAxis
                 yAxisId="bookings"
                 orientation="right"
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                axisLine={false}
+                tickLine={false}
               />
               <Tooltip
+                contentStyle={{ backgroundColor: "var(--popover)", borderColor: "var(--border)", borderRadius: "8px", fontSize: "12px" }}
+                labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
+                itemStyle={{ color: "var(--muted-foreground)" }}
                 formatter={(value, name) =>
                   name === "revenue"
                     ? [`$${Number(value).toLocaleString()}`, "Revenue"]
@@ -192,7 +200,7 @@ export default function AnalyticsPage() {
               <Bar
                 yAxisId="bookings"
                 dataKey="bookings"
-                fill="hsl(var(--chart-2))"
+                fill="var(--chart-2)"
                 radius={[4, 4, 0, 0]}
                 opacity={0.8}
                 name="Bookings"
@@ -201,7 +209,7 @@ export default function AnalyticsPage() {
                 yAxisId="revenue"
                 type="monotone"
                 dataKey="revenue"
-                stroke="hsl(var(--chart-1))"
+                stroke="var(--chart-1)"
                 strokeWidth={2}
                 dot={false}
                 name="Revenue"
@@ -219,40 +227,49 @@ export default function AnalyticsPage() {
         <CardContent>
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={OCCUPANCY_DATA}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                axisLine={false}
+                tickLine={false}
                 interval={4}
               />
               <YAxis
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+                axisLine={false}
+                tickLine={false}
                 tickFormatter={(v) => `${v}%`}
                 domain={[0, 100]}
               />
-              <Tooltip formatter={(v) => [`${Number(v).toFixed(1)}%`]} />
+              <Tooltip
+                contentStyle={{ backgroundColor: "var(--popover)", borderColor: "var(--border)", borderRadius: "8px", fontSize: "12px" }}
+                labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
+                itemStyle={{ color: "var(--muted-foreground)" }}
+                formatter={(v) => [`${Number(v).toFixed(1)}%`]}
+              />
               <Legend />
               <Area
                 type="monotone"
                 dataKey="Grand Palace"
-                stroke="hsl(var(--chart-1))"
-                fill="hsl(var(--chart-1))"
+                stroke="var(--chart-1)"
+                fill="var(--chart-1)"
                 fillOpacity={0.15}
                 strokeWidth={2}
               />
               <Area
                 type="monotone"
                 dataKey="Sunrise Beach"
-                stroke="hsl(var(--chart-2))"
-                fill="hsl(var(--chart-2))"
+                stroke="var(--chart-2)"
+                fill="var(--chart-2)"
                 fillOpacity={0.15}
                 strokeWidth={2}
               />
               <Area
                 type="monotone"
                 dataKey="Mountain View"
-                stroke="hsl(var(--chart-3))"
-                fill="hsl(var(--chart-3))"
+                stroke="var(--chart-3)"
+                fill="var(--chart-3)"
                 fillOpacity={0.15}
                 strokeWidth={2}
               />
