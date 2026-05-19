@@ -255,6 +255,71 @@ func (r *BookingRepo) ListAllBookings(ctx context.Context, page, limit int) ([]*
 	return bookings, total, nil
 }
 
+// ListBookingsByOwner returns paginated bookings for rooms belonging to the owner's hotels.
+// Optionally filters by status when status is non-empty.
+func (r *BookingRepo) ListBookingsByOwner(ctx context.Context, ownerID string, status string, page, limit int) ([]*domain.Booking, int, error) {
+	offset := (page - 1) * limit
+
+	var (
+		total int
+		err   error
+	)
+
+	if status != "" {
+		err = r.DB.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM bookings b
+			JOIN rooms rm ON rm.id = b.room_id
+			JOIN hotels h ON h.id = rm.hotel_id
+			WHERE h.owner_id = $1 AND b.status = $2
+		`, ownerID, status).Scan(&total)
+	} else {
+		err = r.DB.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM bookings b
+			JOIN rooms rm ON rm.id = b.room_id
+			JOIN hotels h ON h.id = rm.hotel_id
+			WHERE h.owner_id = $1
+		`, ownerID).Scan(&total)
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("count bookings by owner: %w", err)
+	}
+
+	var rows *sql.Rows
+	if status != "" {
+		rows, err = r.DB.QueryContext(ctx, `
+			SELECT b.id, b.user_id, b.room_id, b.start_date, b.end_date, b.total_price, b.status, b.created_at
+			FROM bookings b
+			JOIN rooms rm ON rm.id = b.room_id
+			JOIN hotels h ON h.id = rm.hotel_id
+			WHERE h.owner_id = $1 AND b.status = $2
+			ORDER BY b.created_at DESC
+			LIMIT $3 OFFSET $4
+		`, ownerID, status, limit, offset)
+	} else {
+		rows, err = r.DB.QueryContext(ctx, `
+			SELECT b.id, b.user_id, b.room_id, b.start_date, b.end_date, b.total_price, b.status, b.created_at
+			FROM bookings b
+			JOIN rooms rm ON rm.id = b.room_id
+			JOIN hotels h ON h.id = rm.hotel_id
+			WHERE h.owner_id = $1
+			ORDER BY b.created_at DESC
+			LIMIT $2 OFFSET $3
+		`, ownerID, limit, offset)
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("list bookings by owner: %w", err)
+	}
+	defer rows.Close()
+
+	bookings, err := scanBookingRows(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return bookings, total, nil
+}
+
 // scanBookingRows scans multiple booking rows into a slice.
 func scanBookingRows(rows *sql.Rows) ([]*domain.Booking, error) {
 	var bookings []*domain.Booking

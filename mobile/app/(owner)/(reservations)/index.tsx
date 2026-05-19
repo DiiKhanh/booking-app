@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { useBookingsList } from "@/hooks/useBookings";
+import { useOwnerReservations } from "@/hooks/useBookings";
 import { formatCurrency, formatDateRange } from "@/utils/format";
 import type { Booking } from "@/types";
 
@@ -100,7 +100,7 @@ export default function ReservationsScreen() {
   const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
 
-  const { data: bookings = [], isLoading, refetch, isRefetching } = useBookingsList();
+  const { data: bookings = [], isLoading, refetch, isRefetching } = useOwnerReservations();
 
   const filtered = activeFilter === "all"
     ? bookings

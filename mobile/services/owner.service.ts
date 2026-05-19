@@ -1,6 +1,6 @@
 import { apiClient } from "./api";
 import { API } from "@/constants/api";
-import type { Hotel, ApiResponse } from "@/types";
+import type { Hotel, Booking, ApiResponse } from "@/types";
 
 export interface CreateHotelInput {
   readonly name: string;
@@ -55,5 +55,15 @@ export const ownerService = {
 
   async deleteHotel(id: string): Promise<void> {
     await apiClient.delete(API.OWNER.HOTEL_DETAIL(id));
+  },
+
+  async listReservations(status?: string, page = 1, limit = 20): Promise<readonly Booking[]> {
+    const params: Record<string, unknown> = { page, limit };
+    if (status) params.status = status;
+    const response = await apiClient.get<ApiResponse<readonly Booking[]>>(
+      API.OWNER.RESERVATIONS,
+      { params },
+    );
+    return response.data.data ?? [];
   },
 };

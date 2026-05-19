@@ -1,12 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { bookingService } from "@/services/booking.service";
+import { ownerService } from "@/services/owner.service";
 import type { CreateBookingRequest } from "@/types";
 
 export function useBookingsList() {
   return useQuery({
     queryKey: ["bookings"],
     queryFn: () => bookingService.list(),
+  });
+}
+
+export function useOwnerReservations(status?: string) {
+  return useQuery({
+    queryKey: ["owner-reservations", status],
+    queryFn: () => ownerService.listReservations(status),
   });
 }
 

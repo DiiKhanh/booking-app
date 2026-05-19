@@ -37,7 +37,7 @@ export const API = {
     HOTEL_DETAIL: (id: string) => `/owner/hotels/${id}`,
     ROOMS: (hotelId: string) => `/owner/hotels/${hotelId}/rooms`,
     ROOM_INVENTORY: (roomId: string) => `/owner/rooms/${roomId}/inventory`,
-    RESERVATIONS: "/owner/reservations",
+    RESERVATIONS: "/owner/bookings",
   },
 
   ADMIN: {

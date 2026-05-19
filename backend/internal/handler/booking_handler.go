@@ -22,6 +22,7 @@ type BookingServiceInterface interface {
 	CancelBooking(ctx context.Context, id int, userID string) error
 	GetBookingStatus(ctx context.Context, id int, callerUserID string) (string, error)
 	InitializeInventory(ctx context.Context, roomID int, startDate time.Time, days int, total int) error
+	ListOwnerBookings(ctx context.Context, ownerID string, status string, page, limit int) ([]*domain.Booking, int, error)
 }
 
 // BookingHandler handles HTTP requests for bookings.
@@ -221,6 +222,36 @@ func (h *BookingHandler) InitializeInventory(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, response.OK(gin.H{"message": "Inventory initialized for Room 1"}))
+}
+
+// ListOwnerBookings handles GET /api/v1/owner/bookings.
+// Returns paginated bookings for rooms belonging to the authenticated owner's hotels.
+// Optional query param: status (pending|confirmed|cancelled|failed|...)
+func (h *BookingHandler) ListOwnerBookings(c *gin.Context) {
+	ownerID := getUserIDFromContext(c)
+	if ownerID == "" {
+		c.JSON(http.StatusUnauthorized, response.Fail("authentication required"))
+		return
+	}
+
+	status := c.Query("status")
+	page := queryIntDefault(c, "page", 1)
+	limit := queryIntDefault(c, "limit", 20)
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	bookings, total, err := h.svc.ListOwnerBookings(ctx, ownerID, status, page, limit)
+	if err != nil {
+		handleBookingError(c, err)
+		return
+	}
+
+	pages := calculatePages(total, limit)
+	c.JSON(http.StatusOK, response.OKList(
+		response.NewBookingListResponse(bookings),
+		response.Meta{Total: total, Page: page, Limit: limit, Pages: pages},
+	))
 }
 
 // handleBookingError maps domain errors to HTTP status codes for booking endpoints.

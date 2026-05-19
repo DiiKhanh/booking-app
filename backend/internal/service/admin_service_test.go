@@ -135,6 +135,10 @@ func (m *mockAdminBookingRepo) ListAllBookings(ctx context.Context, page, limit 
 	return []*domain.Booking{}, 0, nil
 }
 
+func (m *mockAdminBookingRepo) ListBookingsByOwner(ctx context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+	return []*domain.Booking{}, 0, nil
+}
+
 // --- Mock OutboxRepository (admin extension) ---
 
 type mockAdminOutboxRepo struct {

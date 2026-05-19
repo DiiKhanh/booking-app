@@ -146,6 +146,7 @@ func New(
 			ownerGroup.GET("/rooms/:id/inventory", roomHandler.GetInventory)
 
 			ownerGroup.GET("/dashboard", ownerHandler.Dashboard)
+			ownerGroup.GET("/bookings", bookingHandler.ListOwnerBookings)
 		}
 
 		// ----- Admin routes (JWT + role=admin + auth rate limit) -----

@@ -17,6 +17,7 @@ type mockBookingRepo struct {
 	listByUserFn         func(ctx context.Context, userID string, page, limit int) ([]*domain.Booking, int, error)
 	updateStatusFn       func(ctx context.Context, id int, status string) error
 	cancelBookingFn      func(ctx context.Context, id int, userID string) error
+	listByOwnerFn        func(ctx context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error)
 }
 
 func (m *mockBookingRepo) CreateBooking(ctx context.Context, booking *domain.Booking) error {
@@ -65,6 +66,13 @@ func (m *mockBookingRepo) CancelBooking(ctx context.Context, id int, userID stri
 }
 
 func (m *mockBookingRepo) ListAllBookings(ctx context.Context, page, limit int) ([]*domain.Booking, int, error) {
+	return []*domain.Booking{}, 0, nil
+}
+
+func (m *mockBookingRepo) ListBookingsByOwner(ctx context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+	if m.listByOwnerFn != nil {
+		return m.listByOwnerFn(ctx, ownerID, status, page, limit)
+	}
 	return []*domain.Booking{}, 0, nil
 }
 
@@ -433,5 +441,91 @@ func TestBookingService_GetBookingStatus_WrongUser(t *testing.T) {
 	_, err := svc.GetBookingStatus(context.Background(), 5, "attacker")
 	if !errors.Is(err, domain.ErrForbidden) {
 		t.Errorf("expected ErrForbidden, got %v", err)
+	}
+}
+
+// ---- ListOwnerBookings tests ----
+
+func TestBookingService_ListOwnerBookings_NoFilter(t *testing.T) {
+	bookings := []*domain.Booking{
+		{ID: 1, UserID: "guest-1", RoomID: 10, Status: "confirmed"},
+		{ID: 2, UserID: "guest-2", RoomID: 11, Status: "pending"},
+	}
+	repo := &mockBookingRepo{
+		listByOwnerFn: func(_ context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+			if ownerID != "owner-1" {
+				t.Errorf("unexpected ownerID: %s", ownerID)
+			}
+			if status != "" {
+				t.Errorf("expected empty status filter, got %s", status)
+			}
+			return bookings, 2, nil
+		},
+	}
+	svc := service.NewBookingService(repo, &mockBookingRoomRepo{})
+
+	result, total, err := svc.ListOwnerBookings(context.Background(), "owner-1", "", 1, 20)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("expected total=2, got %d", total)
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 bookings, got %d", len(result))
+	}
+}
+
+func TestBookingService_ListOwnerBookings_WithStatusFilter(t *testing.T) {
+	bookings := []*domain.Booking{
+		{ID: 1, UserID: "guest-1", RoomID: 10, Status: "confirmed"},
+	}
+	repo := &mockBookingRepo{
+		listByOwnerFn: func(_ context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+			if status != "confirmed" {
+				t.Errorf("expected status=confirmed, got %s", status)
+			}
+			return bookings, 1, nil
+		},
+	}
+	svc := service.NewBookingService(repo, &mockBookingRoomRepo{})
+
+	result, total, err := svc.ListOwnerBookings(context.Background(), "owner-1", "confirmed", 1, 20)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 1 || len(result) != 1 {
+		t.Errorf("expected 1 booking, got %d (total=%d)", len(result), total)
+	}
+}
+
+func TestBookingService_ListOwnerBookings_EmptyResult(t *testing.T) {
+	repo := &mockBookingRepo{
+		listByOwnerFn: func(_ context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+			return []*domain.Booking{}, 0, nil
+		},
+	}
+	svc := service.NewBookingService(repo, &mockBookingRoomRepo{})
+
+	result, total, err := svc.ListOwnerBookings(context.Background(), "owner-no-hotels", "", 1, 20)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if total != 0 || len(result) != 0 {
+		t.Errorf("expected empty result, got %d (total=%d)", len(result), total)
+	}
+}
+
+func TestBookingService_ListOwnerBookings_RepoError(t *testing.T) {
+	repo := &mockBookingRepo{
+		listByOwnerFn: func(_ context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+			return nil, 0, errors.New("db error")
+		},
+	}
+	svc := service.NewBookingService(repo, &mockBookingRoomRepo{})
+
+	_, _, err := svc.ListOwnerBookings(context.Background(), "owner-1", "", 1, 20)
+	if err == nil {
+		t.Error("expected error from repo, got nil")
 	}
 }

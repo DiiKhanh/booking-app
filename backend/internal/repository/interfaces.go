@@ -38,6 +38,8 @@ type BookingRepository interface {
 	CancelBooking(ctx context.Context, id int, userID string) error
 	// Admin operations
 	ListAllBookings(ctx context.Context, page, limit int) ([]*domain.Booking, int, error)
+	// Owner operations
+	ListBookingsByOwner(ctx context.Context, ownerID string, status string, page, limit int) ([]*domain.Booking, int, error)
 }
 
 // UserRepository defines data access operations for users.

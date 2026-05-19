@@ -19,12 +19,13 @@ import (
 
 // mockBookingSvc implements handler.BookingServiceInterface for testing.
 type mockBookingSvc struct {
-	createBookingFn   func(ctx context.Context, input domain.CreateBookingInput) (*domain.Booking, error)
-	getBookingFn      func(ctx context.Context, id int, callerUserID string) (*domain.Booking, error)
-	listMyBookingsFn  func(ctx context.Context, userID string, page, limit int) ([]*domain.Booking, int, error)
-	cancelBookingFn   func(ctx context.Context, id int, userID string) error
-	getStatusFn       func(ctx context.Context, id int, callerUserID string) (string, error)
-	initInventoryFn   func(ctx context.Context, roomID int, startDate time.Time, days int, total int) error
+	createBookingFn      func(ctx context.Context, input domain.CreateBookingInput) (*domain.Booking, error)
+	getBookingFn         func(ctx context.Context, id int, callerUserID string) (*domain.Booking, error)
+	listMyBookingsFn     func(ctx context.Context, userID string, page, limit int) ([]*domain.Booking, int, error)
+	cancelBookingFn      func(ctx context.Context, id int, userID string) error
+	getStatusFn          func(ctx context.Context, id int, callerUserID string) (string, error)
+	initInventoryFn      func(ctx context.Context, roomID int, startDate time.Time, days int, total int) error
+	listOwnerBookingsFn  func(ctx context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error)
 }
 
 func (m *mockBookingSvc) CreateBooking(ctx context.Context, input domain.CreateBookingInput) (*domain.Booking, error) {
@@ -67,6 +68,13 @@ func (m *mockBookingSvc) InitializeInventory(ctx context.Context, roomID int, st
 		return m.initInventoryFn(ctx, roomID, startDate, days, total)
 	}
 	return nil
+}
+
+func (m *mockBookingSvc) ListOwnerBookings(ctx context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+	if m.listOwnerBookingsFn != nil {
+		return m.listOwnerBookingsFn(ctx, ownerID, status, page, limit)
+	}
+	return []*domain.Booking{}, 0, nil
 }
 
 // buildBookingRouterWithAuth builds a test router that injects userID into context.
@@ -540,5 +548,93 @@ func TestBookingHandler_LegacyCreateBooking_MissingUserID_Returns400(t *testing.
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+// ---- ListOwnerBookings handler tests ----
+
+func buildOwnerBookingRouter(svc handler.BookingServiceInterface, ownerID string) *gin.Engine {
+	r := gin.New()
+	h := handler.NewBookingHandler(svc)
+	owner := r.Group("/api/v1/owner")
+	owner.Use(func(c *gin.Context) {
+		if ownerID != "" {
+			c.Set("userID", ownerID)
+		}
+		c.Next()
+	})
+	owner.GET("/bookings", h.ListOwnerBookings)
+	return r
+}
+
+func TestBookingHandler_ListOwnerBookings_Returns200(t *testing.T) {
+	bookings := []*domain.Booking{
+		{ID: 1, UserID: "guest-1", RoomID: 10, Status: "confirmed", TotalPrice: 300},
+		{ID: 2, UserID: "guest-2", RoomID: 11, Status: "pending", TotalPrice: 150},
+	}
+	svc := &mockBookingSvc{
+		listOwnerBookingsFn: func(_ context.Context, ownerID, status string, page, limit int) ([]*domain.Booking, int, error) {
+			return bookings, 2, nil
+		},
+	}
+	r := buildOwnerBookingRouter(svc, "owner-1")
+	w := makeBookingRequest(r, http.MethodGet, "/api/v1/owner/bookings", nil)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp response.APIResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("invalid json: %v", err)
+	}
+	if !resp.Success {
+		t.Errorf("expected success=true")
+	}
+	if resp.Meta == nil || resp.Meta.Total != 2 {
+		t.Errorf("expected meta.total=2, got %v", resp.Meta)
+	}
+}
+
+func TestBookingHandler_ListOwnerBookings_WithStatusFilter(t *testing.T) {
+	var capturedStatus string
+	svc := &mockBookingSvc{
+		listOwnerBookingsFn: func(_ context.Context, _, status string, _, _ int) ([]*domain.Booking, int, error) {
+			capturedStatus = status
+			return []*domain.Booking{{ID: 1, Status: status}}, 1, nil
+		},
+	}
+	r := buildOwnerBookingRouter(svc, "owner-1")
+	w := makeBookingRequest(r, http.MethodGet, "/api/v1/owner/bookings?status=confirmed", nil)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if capturedStatus != "confirmed" {
+		t.Errorf("expected status=confirmed passed to service, got %q", capturedStatus)
+	}
+}
+
+func TestBookingHandler_ListOwnerBookings_NoAuth_Returns401(t *testing.T) {
+	svc := &mockBookingSvc{}
+	r := buildOwnerBookingRouter(svc, "")
+	w := makeBookingRequest(r, http.MethodGet, "/api/v1/owner/bookings", nil)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestBookingHandler_ListOwnerBookings_ServiceError_Returns500(t *testing.T) {
+	svc := &mockBookingSvc{
+		listOwnerBookingsFn: func(_ context.Context, _, _ string, _, _ int) ([]*domain.Booking, int, error) {
+			return nil, 0, fmt.Errorf("database unavailable")
+		},
+	}
+	r := buildOwnerBookingRouter(svc, "owner-1")
+	w := makeBookingRequest(r, http.MethodGet, "/api/v1/owner/bookings", nil)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
 	}
 }

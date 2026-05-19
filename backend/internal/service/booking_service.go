@@ -88,6 +88,12 @@ func (s *BookingService) GetBookingStatus(ctx context.Context, id int, callerUse
 	return booking.Status, nil
 }
 
+// ListOwnerBookings returns paginated bookings for rooms belonging to the owner's hotels.
+// An optional status filter narrows results to a specific booking state.
+func (s *BookingService) ListOwnerBookings(ctx context.Context, ownerID string, status string, page, limit int) ([]*domain.Booking, int, error) {
+	return s.repo.ListBookingsByOwner(ctx, ownerID, status, page, limit)
+}
+
 // InitializeInventory seeds inventory for a room (testing helper).
 func (s *BookingService) InitializeInventory(ctx context.Context, roomID int, startDate time.Time, days int, total int) error {
 	return s.repo.InitializeInventory(ctx, roomID, startDate, days, total)
